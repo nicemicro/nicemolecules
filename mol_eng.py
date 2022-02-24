@@ -5,6 +5,8 @@ Created on Mon Feb 21 15:52:19 2022
 @author: nicemicro
 """
 
+from math import sqrt 
+
 class Cov_bond:
     def __init__(self, atoms, electrons):
         self.atoms = atoms
@@ -35,6 +37,13 @@ class Cov_bond:
         if not one_atom in self.atoms:
             return False
         return list(atom for atom in self.atoms if atom != one_atom)
+    
+    def length(self):
+        if len(self.atoms) < 2:
+            return 0
+        xdiff = self.atoms[0].coord_x - self.atoms[1].coord_x
+        ydiff = self.atoms[0].coord_y - self.atoms[1].coord_y
+        return sqrt(xdiff ** 2 + ydiff ** 2)
 
 class Atom:
     def __init__(self, letter, valence_el, coords, charge=0, fullshell=8,
@@ -48,9 +57,11 @@ class Atom:
         self.coord_x = coords[0]
         self.coord_y = coords[1]
     
-    def describe(self):
-        desc  = f"Location of atom at ({self.coord_x}, {self.coord_y})\n"
-        desc += f"  Atom letter representation   : {self.letter}\n"
+    def describe(self, short=False):
+        desc  = f"{self.letter} atom at ({self.coord_x}, {self.coord_y})"
+        if short:
+            return desc
+        desc +=  "\n"
         desc += f"  Base valence electron number : {self.valence}\n"
         desc += f"  Base charge                  : {self.charge}\n"
         desc += f"  Electrons to fill shell      : {self.fullshell}\n"
@@ -68,7 +79,7 @@ class Atom:
         return super().__str__()
     
     def __repr__(self):
-        return super().__repr__() + "\n" + self.describe()
+        return super().__repr__() + "\n" + self.describe(True)
     
     def bond(self, other_atom, order=1, dative=0):
         if self.is_bonded(other_atom):
@@ -110,14 +121,18 @@ class Atom:
 
 def find_molecule(one_atom):
     atomlist = [one_atom]
+    bondlist = []
     current_num = 0
     while current_num < len(atomlist):
         current_atom = atomlist[current_num]
         for bonded_atom in current_atom.bonded_atoms():
             if not bonded_atom in atomlist:
-                atomlist.append(bonded_atom )
+                atomlist.append(bonded_atom)
+            bond_instance = current_atom.bond_instance(bonded_atom)
+            if not bond_instance in bondlist:
+                bondlist.append(bond_instance)
         current_num += 1
-    return atomlist
+    return atomlist, bondlist
 
 def test1():
     a = Atom("C", 4, [0, 0], 0)
@@ -162,13 +177,6 @@ def test3():
     hydrogens[-1].bond(carbons[-1])
     hydrogens.append(Atom("H", 1, [4, 2], fullshell=2))
     hydrogens[-1].bond(carbons[0])
-    for atom_member in find_molecule(hydrogens[3]):
-        print(f"{atom_member.letter} ({atom_member.coord_x}, {atom_member.coord_y})")
-    print()
-    for atom_member in find_molecule(molecules[1]):
-        print(f"{atom_member.letter} ({atom_member.coord_x}, {atom_member.coord_y})")
-    print()
-    for atom_member in find_molecule(carbons[0]):
-        print(f"{atom_member.letter} ({atom_member.coord_x}, {atom_member.coord_y})")
+    return molecules + carbons + hydrogens
 
-test3()
+molecules = test3()
