@@ -24,16 +24,33 @@ class AppContainer(tk.Tk):
         self.draw_all_molecules(atoms, bonds)
     
     def draw_all_molecules(self, atomlist, bondlist):
+        obscure = 7
+        shift = 2
         for bond in bondlist:
             x1, y1, x2, y2 = bond.coords()
             bondlen = bond.length()
-            bond_order = bond.order()
-            obscure = 7
-            xd1 = x1 + (obscure / bondlen) * (x2-x1)
-            xd2 = x2 - (obscure / bondlen) * (x2-x1)
-            yd1 = y1 + (obscure / bondlen) * (y2-y1)
-            yd2 = y2 - (obscure / bondlen) * (y2-y1)
-            self.mol_canvas.create_line(xd1, yd1, xd2, yd2)
+            if bondlen == 0:
+                continue
+            bond_order = int(bond.order())
+            dativity = bond.dativity()
+            bondshifts = list(range(1-bond_order, bond_order+1, 2))
+            for bond in bondshifts:
+                xd1 = x1 + (obscure / bondlen) * (x2-x1)
+                xd2 = x2 - (obscure / bondlen) * (x2-x1)
+                yd1 = y1 + (obscure / bondlen) * (y2-y1)
+                yd2 = y2 - (obscure / bondlen) * (y2-y1)
+                xs = (y1 - y2) / bondlen * shift * bond
+                ys = (x2 - x1) / bondlen * shift * bond
+                if dativity == 0:
+                    arrowtype = None
+                elif dativity < 0:
+                    arrowtype = "first"
+                    dativity += 1
+                elif dativity > 0:
+                    arrowtype = "last"
+                    dativity -= 1
+                self.mol_canvas.create_line(xd1+xs, yd1+ys, xd2+xs, yd2+ys,
+                                            arrow=arrowtype)
         for atom in atomlist:
             self.mol_canvas.create_text(atom.coord_x, atom.coord_y,
                                         text=atom.letter, justify="center")

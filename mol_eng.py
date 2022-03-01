@@ -15,7 +15,8 @@ class Cov_bond:
     def describe(self):
         desc  = f"Bond order: {self.order()}\n"
         for atom, electron in zip(self.atoms, self.electrons):
-            desc += f"  Atom letter: {atom.letter} with {electron} electrons\n"
+            desc += f"  Atom letter: {atom.letter}"
+            desc += f" at ({atom.coord_x}, {atom.coord_y}) with {electron} electrons\n"
         return desc
     
     def __str__(self):
@@ -27,10 +28,15 @@ class Cov_bond:
     def order(self):
         return sum(self.electrons) / len(self.atoms)
     
+    def dativity(self):
+        return (self.electrons[0] - self.electrons[1]) / 2
+    
     def electron_count(self):
         return sum(self.electrons)
     
     def atom_electrons(self, one_atom):
+        if not one_atom in self.atoms:
+            return None
         return self.electrons[self.atoms.index(one_atom)]
     
     def other_atoms(self, one_atom):
@@ -154,9 +160,10 @@ def test1():
     print(b)
     print("bond a to b: ", a.bond(b, 3, 1))
     print("bond b to a: ", b.bond(a, 3, -1))
-    print(a)
-    print(b)
+    print(a.describe())
+    print(b.describe())
     print(a.bonds)
+    print(a.bonds[0].dativity())
 
 def test2():
     print()
@@ -183,7 +190,7 @@ def test3():
         new_bond = molecules[-1].bond(molecules[0])
         bonds.append(new_bond)
     molecules.append(Atom("C", 4, [40, 150]))
-    molecules.append(Atom("O", 6, [70, 120]))
+    molecules.append(Atom("O", 6, [70, 140]))
     new_bond = molecules[-2].bond(molecules[-1], 3, 1)
     bonds.append(new_bond)
     carbons = []
@@ -206,6 +213,6 @@ def test3():
     return molecules + carbons + hydrogens, bonds
 
 if __name__ == '__main__':
-    #test1()
+    test1()
     #test2()
-    molecules, bonds = test3()
+    #molecules, bonds = test3()
