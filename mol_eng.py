@@ -15,7 +15,7 @@ class Cov_bond:
     def describe(self):
         desc  = f"Bond order: {self.order()}\n"
         for atom, electron in zip(self.atoms, self.electrons):
-            desc += f"  Atom letter: {atom.letter}"
+            desc += f"  Atom symbol: {atom.symbol}"
             desc += f" at ({atom.coord_x}, {atom.coord_y}) with {electron} electrons\n"
         return desc
     
@@ -56,9 +56,9 @@ class Cov_bond:
         return sqrt(xdiff ** 2 + ydiff ** 2)
 
 class Atom:
-    def __init__(self, letter, valence_el, coords, charge=0, fullshell=8,
+    def __init__(self, symbol, valence_el, coords, charge=0, fullshell=8,
                  hypervalent=False):
-        self.letter = letter
+        self.symbol = symbol
         self.valence = valence_el
         self.charge = 0
         self.fullshell = fullshell
@@ -68,7 +68,7 @@ class Atom:
         self.coord_y = coords[1]
     
     def describe(self, short=False):
-        desc  = f"{self.letter} atom at ({self.coord_x}, {self.coord_y})"
+        desc  = f"{self.symbol} atom at ({self.coord_x}, {self.coord_y})"
         if short:
             return desc
         desc +=  "\n"
@@ -81,7 +81,7 @@ class Atom:
         for bond in self.bonds:
             desc += f"    {bond.order()} order bond with "
             for atom in bond.other_atoms(self):
-                desc += f"{atom.letter} at ({atom.coord_x}, {atom.coord_y})"
+                desc += f"{atom.symbol} at ({atom.coord_x}, {atom.coord_y})"
             desc += "\n"
         return desc
     
@@ -134,6 +134,14 @@ class Atom:
             from_bonds += bond.electron_count()
             from_bonds -= bond.atom_electrons(self)
         return from_bonds + self.valence
+
+def add_atom_by_symbol(symbol, coords):
+    atom = None
+    if symbol == "C":
+        atom = Atom("C", 4, coords)
+    elif symbol == "O":
+        atom = Atom("O", 6, coords)
+    return atom
 
 def find_molecule(one_atom):
     atomlist = [one_atom]
