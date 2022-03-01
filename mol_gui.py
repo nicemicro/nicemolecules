@@ -50,6 +50,7 @@ class AppContainer(tk.Tk):
         self.bonds = []
         self.graphics = {}
         self.selected = None
+        self.event_listened = False
         self.title("Nice Molecules")
         
         container = ttk.Frame(self)
@@ -65,12 +66,27 @@ class AppContainer(tk.Tk):
         self.mol_canvas.bind("<Button-1>", self.leftclick_canvas)
     
     def leftclick_canvas(self, event):
+        if self.event_listened:
+            self.event_listened = False
+            return
         if self.toolbar.is_select():
             return
         if self.toolbar.what_add():
             if not self.selected is None:
                 self.mol_canvas.itemconfigure(self.selected, fill="black")
                 self.selected = None
+            closestitems = self.mol_canvas.find_closest(event.x, event.y)
+            if len(closestitems) == 0:
+                item = None
+            else:
+                item = closestitems[0]
+            print(item)
+            close = item in self.graphics and \
+                isinstance(self.graphics[item], eng.Atom) and \
+                -20 < self.graphics[item].coord_x - event.x < 20 and \
+                -20 < self.graphics[item].coord_y - event.y < 20
+            if close:
+                return
             coords = [event.x, event.y]
             self.add_atom(self.toolbar.what_add(), coords)
     
@@ -80,10 +96,10 @@ class AppContainer(tk.Tk):
                 self.mol_canvas.itemconfigure(self.selected, fill="black")
             self.selected = atom_s
             self.mol_canvas.itemconfigure(atom_s, fill="green")
-            print(atom_s)
+            self.event_listened = True
             return
         if self.toolbar.what_add():
-            pass
+            self.event_listened = True
     
     def add_atom(self, atom_symbol, coords):
         new_atom = eng.add_atom_by_symbol(atom_symbol, coords)
@@ -131,7 +147,6 @@ class AppContainer(tk.Tk):
             self.mol_canvas.tag_bind(atom_s, "<Button-1>",
                                      lambda event, atom_s=atom_s:
                                          self.leftclick_atom(atom_s, event))
-        print(self.graphics.keys())
         
 def main():
     app = AppContainer()
