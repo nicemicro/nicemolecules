@@ -92,6 +92,9 @@ class Atom:
         return super().__repr__() + "\n" + self.describe(True)
     
     def bond(self, other_atom, order=1, dative=0):
+        if not isinstance(other_atom, Atom):
+            print("Only can bond to an Atom instance")
+            return False
         if self.is_bonded(other_atom):
             assert other_atom.is_bonded(self), "Discrepancy in bond registration to atoms"
             print("Trying to bond with an atom already bonded with")

@@ -119,10 +119,29 @@ class AppContainer(tk.Tk):
             self.event_listened = True
             self.possible_atoms(self.graphics[atom_s])
             self.mode =self.Modes.ADD_LINKED_ATOM
+        #TODO: if the mouse is up right away, the helper lines don't disappear
     
     def mouseup_atom(self, atom_s, event):
+        if self.mode == self.Modes.ADD_LINKED_ATOM:
+            closestitems = self.mol_canvas.find_closest(event.x, event.y)
+            self.mol_canvas.itemconfigure("ui_help", fill="grey")
+            if len(closestitems) == 0:
+                return
+            item = closestitems[0]
+            tags = self.mol_canvas.gettags(item)
+            if len(tags) == 0 or tags[0] != "ui_help":
+                return
+            new_x = int(self.mol_canvas.coords(item)[0])
+            new_y = int(self.mol_canvas.coords(item)[1])
+            atom_connect = self.graphics[atom_s]
+            new_atom = self.add_atom(self.toolbar.what_add(), [new_x, new_y])
+            new_bond = new_atom.bond(atom_connect)
+            self.bonds.append(new_bond)
+            self.redraw_all_molecules(self.atoms, self.bonds)
+            #TODO: even if the cursor is on line, we should add the new atom at the end of the line!
         self.mol_canvas.delete("ui_help")
-        self.mode =self.Modes.NORMAL
+        self.redraw_all_molecules(self.atoms, self.bonds)
+        self.mode = self.Modes.NORMAL
     
     def drag_atom(self, atom_s, event):
         if self.mode == self.Modes.ADD_LINKED_ATOM:
@@ -153,7 +172,8 @@ class AppContainer(tk.Tk):
         assert not new_atom is None, "Unknown symbol probably"
         self.atoms.append(new_atom)
         self.redraw_all_molecules(self.atoms, self.bonds)
-    
+        return new_atom
+
     def draw_bond(self, x1, y1, x2, y2, bondlen, order=1, dativity=0,
                   color="black", tags=None):
         if tags is None:
