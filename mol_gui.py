@@ -76,7 +76,8 @@ class AppContainer(tk.Tk):
         self.toolbar = TopToolbar(container, self)
         self.toolbar.grid(row=0, column=0, sticky="nsew")
         
-        self.mol_canvas = tk.Canvas(container, width=700, height=600)
+        self.mol_canvas = tk.Canvas(container, width=700, height=600,
+                                    bg="white")
         self.mol_canvas.grid(row=1, column=0, sticky="nsew")
         self.mol_canvas.bind("<Button-1>", self.leftclick_canvas)
         
@@ -107,7 +108,7 @@ class AppContainer(tk.Tk):
             coords = [event.x, event.y]
             self.add_atom(self.toolbar.what_add(), coords)
     
-    def leftclick_atom(self, atom_s, event):
+    def leftdown_atom(self, atom_s, event):
         if self.toolbar.is_select():
             if not self.selected is None:
                 self.mol_canvas.itemconfigure(self.selected, fill="black")
@@ -118,30 +119,34 @@ class AppContainer(tk.Tk):
         if self.toolbar.what_add():
             self.event_listened = True
             self.possible_atoms(self.graphics[atom_s])
-            self.mode =self.Modes.ADD_LINKED_ATOM
-        #TODO: if the mouse is up right away, the helper lines don't disappear
+            self.mode = self.Modes.ADD_LINKED_ATOM
+    
+    def set_normal_mode(self):
+        self.mol_canvas.delete("ui_help")
+        self.mode = self.Modes.NORMAL
     
     def mouseup_atom(self, atom_s, event):
         if self.mode == self.Modes.ADD_LINKED_ATOM:
             closestitems = self.mol_canvas.find_closest(event.x, event.y)
             self.mol_canvas.itemconfigure("ui_help", fill="grey")
             if len(closestitems) == 0:
+                self.set_normal_mode()
                 return
             item = closestitems[0]
             tags = self.mol_canvas.gettags(item)
             if len(tags) == 0 or tags[0] != "ui_help":
+                self.set_normal_mode()
                 return
-            new_x = int(self.mol_canvas.coords(item)[0])
-            new_y = int(self.mol_canvas.coords(item)[1])
+            atomplace = "atom_here-" + tags[1].split("-")[-1]
+            new_x = int(self.mol_canvas.coords(atomplace)[0])
+            new_y = int(self.mol_canvas.coords(atomplace)[1])
             atom_connect = self.graphics[atom_s]
             new_atom = self.add_atom(self.toolbar.what_add(), [new_x, new_y])
             new_bond = new_atom.bond(atom_connect)
             self.bonds.append(new_bond)
             self.redraw_all_molecules(self.atoms, self.bonds)
-            #TODO: even if the cursor is on line, we should add the new atom at the end of the line!
-        self.mol_canvas.delete("ui_help")
         self.redraw_all_molecules(self.atoms, self.bonds)
-        self.mode = self.Modes.NORMAL
+        self.set_normal_mode()
     
     def drag_atom(self, atom_s, event):
         if self.mode == self.Modes.ADD_LINKED_ATOM:
@@ -160,11 +165,12 @@ class AppContainer(tk.Tk):
         for (deltax, deltay) in zip(XSHIFT, YSHIFT):
             self.draw_bond(atom.coord_x, atom.coord_y, atom.coord_x+deltax,
                            atom.coord_y+deltay, 30, color="grey",
-                           tags=("ui_help", f"ui_help_{num}"))
+                           tags=("ui_help", f"ui_help-{num}"))
             self.mol_canvas.create_text(atom.coord_x+deltax, atom.coord_y+deltay,
                                         text=self.toolbar.what_add(),
                                         justify="center", fill="grey",
-                                        tags=("ui_help", f"ui_help_{num}"))
+                                        tags=("ui_help", f"ui_help-{num}",
+                                              f"atom_here-{num}"))
             num += 1
     
     def add_atom(self, atom_symbol, coords):
@@ -222,9 +228,9 @@ class AppContainer(tk.Tk):
                                                  text=atom.symbol,
                                                  justify="center")
             self.graphics[atom_s] = atom
-            self.mol_canvas.tag_bind(atom_s, "<Button-1>",
+            self.mol_canvas.tag_bind(atom_s, "<ButtonPress-1>",
                                      lambda event, atom_s=atom_s:
-                                         self.leftclick_atom(atom_s, event))
+                                         self.leftdown_atom(atom_s, event))
             self.mol_canvas.tag_bind(atom_s, "<ButtonRelease-1>",
                                      lambda event, atom_s=atom_s:
                                          self.mouseup_atom(atom_s, event))
