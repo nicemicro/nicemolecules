@@ -83,6 +83,10 @@ class Atom:
             for atom in bond.other_atoms(self):
                 desc += f"{atom.symbol} at ({atom.coord_x}, {atom.coord_y})"
             desc += "\n"
+        desc += f"  Non-bonding electrons      : {self.nonbonding_el()}\n"
+        desc += f"  Unfilled valence orbitals  : {self.empty_valence()}\n"
+        desc += f"  Radicals                   : {self.radicals()}\n"
+        desc += f"  Non-bonding pairs          : {self.nonbonding_pairs()}\n"
         return desc
     
     def __str__(self):
@@ -113,7 +117,8 @@ class Atom:
     
     def is_bonded(self, other_atom):
         bond_list_lists = list(bond.other_atoms(self) for bond in self.bonds)
-        return other_atom in [item for sublist in bond_list_lists for item in sublist]
+        return other_atom in [item for sublist in bond_list_lists for
+                              item in sublist]
     
     def bonded_atoms(self):
         bond_list_lists = list(bond.other_atoms(self) for bond in self.bonds)
@@ -137,14 +142,41 @@ class Atom:
             from_bonds += bond.electron_count()
             from_bonds -= bond.atom_electrons(self)
         return from_bonds + self.valence
+    
+    def nonbonding_el(self):
+        nonbonding = self.valence
+        for bond in self.bonds:
+            nonbonding -= bond.atom_electrons(self)
+        return nonbonding
+    
+    def empty_valence(self):
+        return self.fullshell - self.electrons()
+    
+    def radicals(self):
+        radicals = min(self.empty_valence(), self.nonbonding_el())
+        radicals = radicals % 2
+        return radicals
+    
+    def nonbonding_pairs(self):
+        nonbonding = self.nonbonding_el() - self.radicals()
+        return nonbonding // 2
 
 def add_atom_by_symbol(symbol, coords):
-    atom = None
+    if symbol == "H":
+        return Atom("H", 1, coords, fullshell=2)
+    if symbol == "B":
+        return Atom("B", 3, coords)
     if symbol == "C":
-        atom = Atom("C", 4, coords)
-    elif symbol == "O":
-        atom = Atom("O", 6, coords)
-    return atom
+        return Atom("C", 4, coords)
+    if symbol == "N":
+        return Atom("N", 5, coords)
+    if symbol == "O":
+        return Atom("O", 6, coords)
+    if symbol == "F":
+        return Atom("F", 7, coords)
+    if symbol == "S":
+        return Atom("S", 6, coords, hypervalent=True)
+    return None
 
 def find_molecule(one_atom):
     atomlist = [one_atom]
@@ -160,70 +192,3 @@ def find_molecule(one_atom):
                 bondlist.append(bond_instance)
         current_num += 1
     return atomlist, bondlist
-
-def test1():
-    print()
-    print("--== Test 1 ==-")
-    print()
-    a = Atom("C", 4, [20, 20], 0)
-    b = Atom("O", 6, [40, 20], 0)
-    print(a)
-    print(b)
-    print("bond a to b: ", a.bond(b, 3, 1))
-    print("bond b to a: ", b.bond(a, 3, -1))
-    print(a.describe())
-    print(b.describe())
-    print(a.bonds)
-    print(a.bonds[0].dativity())
-
-def test2():
-    print()
-    print("--== Test 2 ==-")
-    print()
-    a = Atom("C", 4, [40, 40])
-    b = Atom("H", 1, [20, 40], fullshell=2)
-    c = Atom("H", 1, [40, 20], fullshell=2)
-    d = Atom("H", 1, [20, 60], fullshell=2)
-    e = Atom("H", 1, [60, 20], fullshell=2)
-    a.bond(b)
-    a.bond(c)
-    a.bond(d)
-    a.bond(e)
-    print(a)
-    print(a.bonds)
-
-def test3():
-    molecules = []
-    bonds = []
-    molecules.append(Atom("C", 4, [40, 40]))
-    for index in range(4):
-        molecules.append(Atom("H", 1, [20 + (index % 2)*40, 20+(index // 2)*40], fullshell=2))
-        new_bond = molecules[-1].bond(molecules[0])
-        bonds.append(new_bond)
-    molecules.append(Atom("C", 4, [40, 150]))
-    molecules.append(Atom("O", 6, [70, 140]))
-    new_bond = molecules[-2].bond(molecules[-1], 3, 1)
-    bonds.append(new_bond)
-    carbons = []
-    hydrogens = []
-    for index in range(3):
-        carbons.append(Atom("C", 4, [120+index*30, 60]))
-        if len(carbons) > 1:
-            new_bond = carbons[-1].bond(carbons[-2])
-            bonds.append(new_bond)
-        for index2 in range(2):
-            hydrogens.append(Atom("H", 1, [120+index*30, 30+index2*60], fullshell=2))
-            new_bond = hydrogens[-1].bond(carbons[-1])
-            bonds.append(new_bond)
-    hydrogens.append(Atom("H", 1, [210, 60], fullshell=2))
-    new_bond = hydrogens[-1].bond(carbons[-1])
-    bonds.append(new_bond)
-    hydrogens.append(Atom("H", 1, [90, 60], fullshell=2))
-    new_bond = hydrogens[-1].bond(carbons[0])
-    bonds.append(new_bond)
-    return molecules + carbons + hydrogens, bonds
-
-if __name__ == '__main__':
-    test1()
-    #test2()
-    #molecules, bonds = test3()

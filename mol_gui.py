@@ -6,6 +6,7 @@ Created on Fri Feb 25 07:27:35 2022
 @author: nicemicro
 """
 import mol_eng as eng
+import mol_tst as tst
 import tkinter as tk
 from tkinter import ttk
 from enum import IntEnum, auto
@@ -101,7 +102,7 @@ class AppContainer(tk.Tk):
         self.mol_canvas.grid(row=1, column=0, sticky="nsew")
         self.mol_canvas.bind("<Button-1>", self.leftclick_canvas)
         
-        #self.atoms, self.bonds = eng.test3()
+        #self.atoms, self.bonds = tst.SF6()
         #self.redraw_all_molecules(self.atoms, self.bonds)
     
     def leftclick_canvas(self, event):
