@@ -163,6 +163,20 @@ class AppContainer(tk.Tk):
     def possible_atoms(self, atom):
         num = 1
         for (deltax, deltay) in zip(XSHIFT, YSHIFT):
+            (x1, y1, x2, y2) = (atom.coord_x + deltax - MINDIST/2,
+                                atom.coord_y + deltay - MINDIST/2,
+                                atom.coord_x + deltax + MINDIST/2,
+                                atom.coord_y + deltay + MINDIST/2)
+            over = self.mol_canvas.find_overlapping(x1, y1, x2, y2)
+            over_atom = False
+            for obj in over:
+                tags = self.mol_canvas.gettags(obj)
+                if len(tags) > 0 and ("atom" in tags or "bond" in tags):
+                    over_atom = True
+                    break
+            if over_atom:
+                num += 1
+                continue
             self.draw_bond(atom.coord_x, atom.coord_y, atom.coord_x+deltax,
                            atom.coord_y+deltay, 30, color="grey",
                            tags=("ui_help", f"ui_help-{num}"))
@@ -220,13 +234,14 @@ class AppContainer(tk.Tk):
             bond_order = int(bond.order())
             dativity = bond.dativity()
             bond_drawings = self.draw_bond(x1, y1, x2, y2, bondlen, 
-                                           bond_order, dativity)
+                                           bond_order, dativity, tags=("bond"))
             for bondid in bond_drawings:
                 self.graphics[bondid] = bond
         for atom in atomlist:
             atom_s = self.mol_canvas.create_text(atom.coord_x, atom.coord_y,
                                                  text=atom.symbol,
-                                                 justify="center")
+                                                 justify="center",
+                                                 tags=("atom"))
             self.graphics[atom_s] = atom
             self.mol_canvas.tag_bind(atom_s, "<ButtonPress-1>",
                                      lambda event, atom_s=atom_s:
