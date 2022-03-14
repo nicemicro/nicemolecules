@@ -5,70 +5,73 @@ Created on Mon Feb 21 15:52:19 2022
 @author: nicemicro
 """
 
-from math import sqrt 
+from math import sqrt
+from typing import Optional, Sequence
 
 class Cov_bond:
-    def __init__(self, atoms, electrons):
-        self.atoms = atoms
-        self.electrons = electrons
+    def __init__(self, atoms, electrons: list[int]):
+        self.atoms: list[Atom] = atoms
+        self.electrons: list[int] = electrons
     
-    def describe(self):
+    def describe(self) -> str:
         desc  = f"Bond order: {self.order()}\n"
         for atom, electron in zip(self.atoms, self.electrons):
             desc += f"  Atom symbol: {atom.symbol}"
             desc += f" at ({atom.coord_x}, {atom.coord_y}) with {electron} electrons\n"
         return desc
     
-    def __str__(self):
+    def __str__(self) -> str:
         return super().__str__()
     
-    def __repr__(self):
+    def __repr__(self) -> str:
         return super().__repr__() + "\n" + self.describe()
     
-    def order(self):
+    def order(self) -> float:
         return sum(self.electrons) / len(self.atoms)
     
-    def dativity(self):
+    def dativity(self) -> float:
         return (self.electrons[0] - self.electrons[1]) / 2
     
-    def electron_count(self):
+    def electron_count(self) -> int:
         return sum(self.electrons)
     
     def atom_electrons(self, one_atom):
+        assert isinstance(one_atom, Atom), "Only atoms are involved in a bond"
         if not one_atom in self.atoms:
             return None
         return self.electrons[self.atoms.index(one_atom)]
     
     def other_atoms(self, one_atom):
+        assert isinstance(one_atom, Atom), "Only atoms are involved in a bond"
         if not one_atom in self.atoms:
-            return False
+            return None
         return list(atom for atom in self.atoms if atom != one_atom)
     
-    def coords(self):
+    def coords(self) -> tuple[float, float, float, float]:
         return (self.atoms[0].coord_x, self.atoms[0].coord_y,
                 self.atoms[1].coord_x, self.atoms[1].coord_y)
     
-    def length(self):
+    def length(self) -> float:
         if len(self.atoms) < 2:
             return 0
-        xdiff = self.atoms[0].coord_x - self.atoms[1].coord_x
-        ydiff = self.atoms[0].coord_y - self.atoms[1].coord_y
+        xdiff: float = self.atoms[0].coord_x - self.atoms[1].coord_x
+        ydiff: float = self.atoms[0].coord_y - self.atoms[1].coord_y
         return sqrt(xdiff ** 2 + ydiff ** 2)
 
 class Atom:
-    def __init__(self, symbol, valence_el, coords, charge=0, fullshell=8,
-                 hypervalent=False):
+    def __init__(self, symbol: str, valence_el: int, coords: Sequence[float],
+                 charge: int=0, fullshell: int=8, hypervalent:bool=False):
         self.symbol = symbol
         self.valence = valence_el
         self.charge = 0
         self.fullshell = fullshell
         self.hypervalent = hypervalent
-        self.bonds = []
-        self.coord_x = coords[0]
-        self.coord_y = coords[1]
+        self.bonds: list[Cov_bond] = []
+        self.coord_x: float = coords[0]
+        self.coord_y:float = coords[1]
     
-    def describe(self, short=False):
-        desc  = f"{self.symbol} atom at ({self.coord_x}, {self.coord_y})"
+    def describe(self, short: bool=False) -> str:
+        desc: str  = f"{self.symbol} atom at ({self.coord_x}, {self.coord_y})"
         if short:
             return desc
         desc +=  "\n"
@@ -86,36 +89,35 @@ class Atom:
         desc += f"  Non-bonding electrons      : {self.nonbonding_el()}\n"
         desc += f"  Unfilled valence orbitals  : {self.empty_valence()}\n"
         desc += f"  Radicals                   : {self.radicals()}\n"
-        desc += f"  Non-bonding pairs          : {self.nonbonding_pairs()}\n"
+        desc += f"  Lone pairs          : {self.lone_pairs()}\n"
         return desc
     
-    def __str__(self):
+    def __str__(self) -> str:
         return super().__str__()
     
-    def __repr__(self):
+    def __repr__(self) -> str:
         return super().__repr__() + "\n" + self.describe(True)
     
-    def bond(self, other_atom, order=1, dative=0):
-        if not isinstance(other_atom, Atom):
-            print("Only can bond to an Atom instance")
-            return False
+    def bond(self, other_atom, order: int=1, dative: int=0) -> Optional[Cov_bond]:
+        assert isinstance(other_atom, Atom), "Only can bond to an Atom instance"
         if self.is_bonded(other_atom):
             assert other_atom.is_bonded(self), "Discrepancy in bond registration to atoms"
             print("Trying to bond with an atom already bonded with")
-            return False
+            return None
         assert not other_atom.is_bonded(self), "Discrepancy in bond registration to atoms"
-        new_bond = Cov_bond([self, other_atom], [order-dative, order+dative])
+        new_bond: Cov_bond = Cov_bond([self, other_atom], [order-dative, order+dative])
         self.bonds.append(new_bond)
         other_atom.register_bond(new_bond)
         return new_bond
     
-    def register_bond(self, new_bond):
+    def register_bond(self, new_bond: Cov_bond):
         if self in new_bond.atoms:
             self.bonds.append(new_bond)
         else:
             assert False, "Trying to register a bond that does not work"
     
-    def is_bonded(self, other_atom):
+    def is_bonded(self, other_atom) -> bool:
+        assert isinstance(other_atom, Atom), "Only Atom instance can be bonded to an Atom"
         bond_list_lists = list(bond.other_atoms(self) for bond in self.bonds)
         return other_atom in [item for sublist in bond_list_lists for
                               item in sublist]
@@ -123,45 +125,46 @@ class Atom:
     def bonded_atoms(self):
         bond_list_lists = list(bond.other_atoms(self) for bond in self.bonds)
         bond_list = [item for sublist in bond_list_lists for item in sublist]
-        atomlist = []
+        atomlist: list[Atom] = []
         for atom in bond_list:
             if not atom in atomlist:
                 atomlist.append(atom)
         return atomlist
     
-    def bond_instance(self, other_atom):
+    def bond_instance(self, other_atom) -> Optional[Cov_bond]:
+        assert isinstance(other_atom, Atom), "Only Atom instance can be bonded to an Atom"
         for bond in self.bonds:
             if other_atom in bond.other_atoms(self):
                 return bond
         else:
-            return False
+            return None
     
-    def electrons(self):
-        from_bonds = 0
+    def electrons(self) -> int:
+        from_bonds: int = 0
         for bond in self.bonds:
             from_bonds += bond.electron_count()
             from_bonds -= bond.atom_electrons(self)
         return from_bonds + self.valence
     
-    def nonbonding_el(self):
-        nonbonding = self.valence
+    def nonbonding_el(self) -> int:
+        nonbonding: int = self.valence
         for bond in self.bonds:
             nonbonding -= bond.atom_electrons(self)
         return nonbonding
     
-    def empty_valence(self):
+    def empty_valence(self) -> int:
         return self.fullshell - self.electrons()
     
-    def radicals(self):
-        radicals = min(self.empty_valence(), self.nonbonding_el())
+    def radicals(self) -> int:
+        radicals: int = min(self.empty_valence(), self.nonbonding_el())
         radicals = radicals % 2
         return radicals
     
-    def nonbonding_pairs(self):
-        nonbonding = self.nonbonding_el() - self.radicals()
+    def lone_pairs(self) -> int:
+        nonbonding: int = self.nonbonding_el() - self.radicals()
         return nonbonding // 2
 
-def add_atom_by_symbol(symbol, coords):
+def add_atom_by_symbol(symbol: str, coords: Sequence[float]) -> Optional[Atom] :
     if symbol == "H":
         return Atom("H", 1, coords, fullshell=2)
     if symbol == "B":
@@ -178,17 +181,18 @@ def add_atom_by_symbol(symbol, coords):
         return Atom("S", 6, coords, hypervalent=True)
     return None
 
-def find_molecule(one_atom):
-    atomlist = [one_atom]
-    bondlist = []
-    current_num = 0
+def find_molecule(one_atom: Atom) -> tuple:
+    atomlist: list[Atom] = [one_atom]
+    bondlist: list[Cov_bond] = []
+    current_num: int = 0
     while current_num < len(atomlist):
-        current_atom = atomlist[current_num]
+        current_atom: Atom = atomlist[current_num]
         for bonded_atom in current_atom.bonded_atoms():
             if not bonded_atom in atomlist:
                 atomlist.append(bonded_atom)
+            bond_instance: Optional[Cov_bond]
             bond_instance = current_atom.bond_instance(bonded_atom)
-            if not bond_instance in bondlist:
+            if not (bond_instance is None) and (not bond_instance in bondlist):
                 bondlist.append(bond_instance)
         current_num += 1
     return atomlist, bondlist

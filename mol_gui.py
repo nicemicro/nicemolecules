@@ -10,6 +10,7 @@ import mol_tst as tst
 import tkinter as tk
 from tkinter import ttk
 from enum import IntEnum, auto
+from typing import Optional, Sequence, Union
 
 MINDIST = 20
 DEFLEN = 30
@@ -27,12 +28,12 @@ class TopToolbar(ttk.Frame):
         ADD_ATOM = auto()
         ADD_BOND = auto()
     
-    def __init__(self, parent, controller):
+    def __init__(self, parent: ttk.Frame, controller: tk.Tk) -> None:
         ttk.Frame.__init__(self, parent)
-        self.controller = controller
-        self.mode = self.Modes.SELECT
-        self.atom = None
-        self.bond = [1]
+        self.controller: tk.Tk = controller
+        self.mode: int = self.Modes.SELECT
+        self.symbol: str = "C"
+        self.bond: list[int] = [1]
         ttk.Button(self, text="Select", command=self.set_select) \
             .grid(row=0, column=0, columnspan=1)
         ttk.Button(self, text="C", command=lambda: self.set_add("C")) \
@@ -44,30 +45,29 @@ class TopToolbar(ttk.Frame):
         ttk.Button(self, text="==", command=lambda: self.set_bond([2])) \
             .grid(row=0, column=4, columnspan=1)
     
-    def is_select(self):
+    def is_select(self) -> bool:
         return self.mode == self.Modes.SELECT
     
-    def is_add(self):
+    def is_add(self) -> bool:
         return self.mode == self.Modes.ADD_ATOM
     
-    def is_connect(self):
+    def is_connect(self) -> bool:
         return self.mode == self.Modes.ADD_BOND
     
-    def atom_symbol(self):
-        return self.atom
+    def atom_symbol(self) -> str:
+        return self.symbol
     
-    def bond_order(self):
+    def bond_order(self) -> int:
         return self.bond[0]
     
-    def set_select(self):
+    def set_select(self) -> None:
         self.mode = self.Modes.SELECT
-        self.atom = None
         
-    def set_add(self, atom):
+    def set_add(self, symbol: str) -> None:
         self.mode = self.Modes.ADD_ATOM
-        self.atom = atom
+        self.symbol= symbol
     
-    def set_bond(self, bondtype):
+    def set_bond(self, bondtype: list[Optional[int]]) -> None:
         self.mode = self.Modes.ADD_BOND
         for index, item in enumerate(bondtype):
             if not item is None:
@@ -79,13 +79,13 @@ class AppContainer(tk.Tk):
         ADD_LINKED_ATOM = auto()
         LINK_ATOMS = auto()
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         tk.Tk.__init__(self, *args, **kwargs)
-        self.atoms = []
-        self.bonds = []
-        self.graphics = {}
-        self.selected = None
-        self.event_listened = False
+        self.atoms: list[eng.Atom ]= []
+        self.bonds: list[eng.Cov_bond] = []
+        self.graphics: dict[int, Union[eng.Atom, eng.Cov_bond]] = {}
+        self.selected: Optional[int] = None
+        self.event_listened: bool = False
         self.mode = self.Modes.NORMAL
         self.title("Nice Molecules")
         
@@ -105,7 +105,7 @@ class AppContainer(tk.Tk):
         #self.atoms, self.bonds = tst.SF6()
         #self.redraw_all_molecules(self.atoms, self.bonds)
     
-    def leftclick_canvas(self, event):
+    def leftclick_canvas(self, event: tk.Event) -> None:
         if self.event_listened:
             self.event_listened = False
             return
@@ -115,55 +115,58 @@ class AppContainer(tk.Tk):
             if not self.selected is None:
                 self.mol_canvas.itemconfigure(self.selected, fill="black")
                 self.selected = None
-            closestitems = self.mol_canvas.find_closest(event.x, event.y)
+            closestitems: tuple[int] = self.mol_canvas.find_closest(event.x, event.y)
             if len(closestitems) == 0:
                 item = None
             else:
                 item = closestitems[0]
-            close = item in self.graphics and \
-                isinstance(self.graphics[item], eng.Atom) and \
-                -MINDIST < self.graphics[item].coord_x - event.x < MINDIST and \
-                -MINDIST < self.graphics[item].coord_y - event.y < MINDIST
-            if close:
-                return
-            coords = [event.x, event.y]
+            if item in self.graphics and isinstance(self.graphics[item], eng.Atom):
+                item_obj = self.graphics[item]
+                assert isinstance(item_obj, eng.Atom)
+                if -MINDIST < item_obj.coord_x - event.x < MINDIST \
+                        and -MINDIST < item_obj.coord_y - event.y < MINDIST:
+                    return
+            coords: list[int] = [event.x, event.y]
             self.add_atom(self.toolbar.atom_symbol(), coords)
     
-    def leftdown_atom(self, atom_s, event):
+    def leftdown_atom(self, sel_atom_num: int, event: tk.Event) -> None:
+        sel_atom = self.graphics[sel_atom_num]
+        assert isinstance(sel_atom, eng.Atom), "The selection should have been an atom"
         if self.toolbar.is_select():
             if not self.selected is None:
                 self.mol_canvas.itemconfigure(self.selected, fill="black")
-            self.selected = atom_s
-            self.mol_canvas.itemconfigure(atom_s, fill="green")
+            self.selected = sel_atom_num
+            self.mol_canvas.itemconfigure(sel_atom_num, fill="green")
             self.event_listened = True
             return
         if self.toolbar.is_add():
             self.event_listened = True
-            self.possible_atoms(self.graphics[atom_s])
+            self.possible_atoms(sel_atom)
             self.mode = self.Modes.ADD_LINKED_ATOM
             return
         if self.toolbar.is_connect():
             self.event_listened = True
-            self.possible_links(self.graphics[atom_s])
+            self.possible_links(sel_atom)
             self.mode = self.Modes.LINK_ATOMS
     
-    def close_selection(self, closestitems):
+    def close_selection(self, closestitems: list[int]) \
+            -> tuple[Optional[int], Optional[Sequence[str]]]:
         if len(closestitems) == 0:
             self.set_normal_mode()
             return None, None
-        item = closestitems[0]
-        tags = self.mol_canvas.gettags(item)
+        item: int = closestitems[0]
+        tags: Sequence[str] = self.mol_canvas.gettags(item)
         if ((len(tags) < 2 or tags[0] != "ui_help") and 
                 (len(tags) < 1 or tags[0] != "atom")):
             return None, None
         return item, tags
     
-    def mouseup_atom(self, atom_s, event):
+    def mouseup_atom(self, atom_s: int, event: tk.Event) -> None:
         if self.mode == self.Modes.ADD_LINKED_ATOM:
             closestitems = self.mol_canvas.find_closest(event.x, event.y)
             self.mol_canvas.itemconfigure("ui_help", fill="grey")
             item, tags = self.close_selection(closestitems)
-            if item is None:
+            if item is None or tags is None:
                 self.set_normal_mode()
                 return
             atomplace = "atom_here-" + tags[1].split("-")[-1]
@@ -171,8 +174,8 @@ class AppContainer(tk.Tk):
             new_y = int(self.mol_canvas.coords(atomplace)[1])
             atom_connect = self.graphics[atom_s]
             new_atom = self.add_atom(self.toolbar.atom_symbol(), [new_x, new_y])
-            new_bond = new_atom.bond(atom_connect,
-                                     order=self.toolbar.bond_order())
+            new_bond = new_atom.bond(atom_connect, order=self.toolbar.bond_order())
+            assert not new_bond is None, "No new bond could be formed"
             self.bonds.append(new_bond)
             self.redraw_all_molecules(self.atoms, self.bonds)
             self.set_normal_mode()
@@ -181,7 +184,7 @@ class AppContainer(tk.Tk):
             self.mol_canvas.itemconfigure("ui_help", fill="#aaaaaa")
             self.mol_canvas.itemconfigure("atom", fill="black")
             item, tags = self.close_selection(closestitems)
-            if item is None:
+            if item is None or tags is None:
                 self.set_normal_mode()
                 return
             selected_atom = -1
@@ -193,42 +196,44 @@ class AppContainer(tk.Tk):
                 self.set_normal_mode()
                 return
             atom_connect = self.graphics[atom_s]
+            assert isinstance(atom_connect, eng.Atom), "Trying to bobd to a non-atom"
             new_bond = atom_connect.bond(self.graphics[selected_atom],
                                          order=self.toolbar.bond_order())
+            assert not new_bond is None, "Creating a bond failed"
             self.bonds.append(new_bond)
             self.redraw_all_molecules(self.atoms, self.bonds)
             self.set_normal_mode()
     
-    def drag_atom(self, atom_s, event):
+    def drag_atom(self, atom_s: int, event: tk.Event) -> None:
         if (self.mode == self.Modes.ADD_LINKED_ATOM or
                 self.mode == self.Modes.LINK_ATOMS):
             closestitems = self.mol_canvas.find_closest(event.x, event.y)
             self.mol_canvas.itemconfigure("ui_help", fill="#aaaaaa")
             self.mol_canvas.itemconfigure("atom", fill="black")
             item, tags = self.close_selection(closestitems)
-            if item is None:
+            if item is None or tags is None:
                 return
-        if self.mode == self.Modes.ADD_LINKED_ATOM:
-            if len(tags) < 2 or tags[0] != "ui_help":
-                return
-            self.mol_canvas.itemconfigure(tags[1], fill="blue")
-        if self.mode == self.Modes.LINK_ATOMS:
-            selected_atom = -1
-            if len(tags) >= 2 and tags[0] == "ui_help":
-                selected_atom = int(tags[1].split("-")[-1])
-            if len(tags) >= 1 and tags[0] == "atom":
-                selected_atom = item
-            if selected_atom == -1 or selected_atom == atom_s:
-                return
-            self.mol_canvas.itemconfigure(f"ui_help-{selected_atom}",
-                                          fill="blue")
-            self.mol_canvas.itemconfigure(selected_atom, fill ="blue")
+            if self.mode == self.Modes.ADD_LINKED_ATOM:
+                if len(tags) < 2 or tags[0] != "ui_help":
+                    return
+                self.mol_canvas.itemconfigure(tags[1], fill="blue")
+            elif self.mode == self.Modes.LINK_ATOMS:
+                selected_atom = -1
+                if len(tags) >= 2 and tags[0] == "ui_help":
+                    selected_atom = int(tags[1].split("-")[-1])
+                if len(tags) >= 1 and tags[0] == "atom":
+                    selected_atom = item
+                if selected_atom == -1 or selected_atom == atom_s:
+                    return
+                self.mol_canvas.itemconfigure(f"ui_help-{selected_atom}",
+                                              fill="blue")
+                self.mol_canvas.itemconfigure(selected_atom, fill ="blue")
         
-    def set_normal_mode(self):
+    def set_normal_mode(self) -> None:
         self.mol_canvas.delete("ui_help")
         self.mode = self.Modes.NORMAL
     
-    def possible_links(self, atom):
+    def possible_links(self, atom: eng.Atom) -> None:
         for atom_link_num in self.graphics:
             atom_link = self.graphics[atom_link_num]
             if not isinstance(atom_link, eng.Atom):
@@ -239,7 +244,7 @@ class AppContainer(tk.Tk):
                            atom_link.coord_y, -1, color="#aaaaaa",
                            tags=("ui_help", f"ui_help-{atom_link_num}"))
     
-    def possible_atoms(self, atom):
+    def possible_atoms(self, atom: eng.Atom) -> None:
         num = 1
         for (deltax, deltay) in zip(XSHIFT, YSHIFT):
             (x1, y1, x2, y2) = (atom.coord_x + deltax - MINDIST/2,
@@ -266,15 +271,17 @@ class AppContainer(tk.Tk):
                                               f"atom_here-{num}"))
             num += 1
     
-    def add_atom(self, atom_symbol, coords):
+    def add_atom(self, atom_symbol: str, coords: Sequence[float]) -> eng.Atom:
         new_atom = eng.add_atom_by_symbol(atom_symbol, coords)
         assert not new_atom is None, "Unknown symbol probably"
         self.atoms.append(new_atom)
         self.redraw_all_molecules(self.atoms, self.bonds)
         return new_atom
 
-    def draw_bond(self, x1, y1, x2, y2, bondlen, order=-1, dativity=0,
-                  color="black", tags=None):
+    def draw_bond(self, x1: float, y1: float, x2: float, y2: float,
+                  bondlen: float=-1, order: float=-1, dativity: float=0,
+                  color: str="black", tags: Optional[tuple[str, ...]]=None
+                  ) -> list[int]:
         if tags is None:
             tags = ()
         if bondlen == -1:
@@ -283,8 +290,8 @@ class AppContainer(tk.Tk):
             order = self.toolbar.bond_order()
         obscure = 7
         shift = 2
-        bondshifts = list(range(1-order, order+1, 2))
-        bond_objects = []
+        bondshifts = list(range(1-int(order), int(order)+1, 2))
+        bond_objects: list[int] = []
         for bondpart in bondshifts:
             xd1 = x1 + (obscure / bondlen) * (x2-x1)
             xd2 = x2 - (obscure / bondlen) * (x2-x1)
@@ -306,7 +313,8 @@ class AppContainer(tk.Tk):
             bond_objects.append(bondid)
         return bond_objects
     
-    def redraw_all_molecules(self, atomlist, bondlist):
+    def redraw_all_molecules(self, atomlist: list[eng.Atom],
+                             bondlist: list[eng.Cov_bond]) -> None:
         self.mol_canvas.delete("all")
         self.graphics = {}
         for bond in bondlist:
@@ -314,17 +322,17 @@ class AppContainer(tk.Tk):
             bondlen = bond.length()
             if bondlen == 0:
                 continue
-            bond_order = int(bond.order())
+            bond_order = bond.order()
             dativity = bond.dativity()
             bond_drawings = self.draw_bond(x1, y1, x2, y2, bondlen, 
-                                           bond_order, dativity, tags=("bond"))
+                                           bond_order, dativity, tags=("bond", ))
             for bondid in bond_drawings:
                 self.graphics[bondid] = bond
         for atom in atomlist:
-            atom_s = self.mol_canvas.create_text(atom.coord_x, atom.coord_y,
-                                                 text=atom.symbol,
-                                                 justify="center",
-                                                 tags=("atom"))
+            atom_s: int = self.mol_canvas.create_text(atom.coord_x, atom.coord_y,
+                                                     text=atom.symbol,
+                                                     justify="center",
+                                                     tags=("atom"))
             self.graphics[atom_s] = atom
             #self.mol_canvas.addtag_above(f"atom-{atom_s}", atom_s)
             self.mol_canvas.tag_bind(atom_s, "<ButtonPress-1>",
