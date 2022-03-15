@@ -9,6 +9,7 @@ import mol_eng as eng
 import mol_tst as tst
 import tkinter as tk
 from tkinter import ttk
+from math import sqrt
 from enum import IntEnum, auto
 from typing import Optional, Sequence, Union
 
@@ -115,7 +116,7 @@ class AppContainer(tk.Tk):
             if not self.selected is None:
                 self.mol_canvas.itemconfigure(self.selected, fill="black")
                 self.selected = None
-            closestitems: tuple[int] = self.mol_canvas.find_closest(event.x, event.y)
+            closestitems: tuple[int, ...] = self.mol_canvas.find_closest(event.x, event.y)
             if len(closestitems) == 0:
                 item = None
             else:
@@ -149,7 +150,7 @@ class AppContainer(tk.Tk):
             self.possible_links(sel_atom)
             self.mode = self.Modes.LINK_ATOMS
     
-    def close_selection(self, closestitems: list[int]) \
+    def close_selection(self, closestitems: tuple[int, ...]) \
             -> tuple[Optional[int], Optional[Sequence[str]]]:
         if len(closestitems) == 0:
             self.set_normal_mode()
@@ -285,7 +286,7 @@ class AppContainer(tk.Tk):
         if tags is None:
             tags = ()
         if bondlen == -1:
-            bondlen = ((x2 - x1)**2 + (y2 - y1)**2) ** 0.5
+            bondlen = sqrt((x2 - x1)**2 + (y2 - y1)**2)
         if order == -1:
             order = self.toolbar.bond_order()
         obscure = 7
