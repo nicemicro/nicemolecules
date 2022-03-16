@@ -145,6 +145,10 @@ class AppContainer(tk.Tk):
             return
         if self.toolbar.is_add():
             self.event_listened = True
+            test_atom = eng.add_atom_by_symbol(self.toolbar.atom_symbol(), [0, 0])
+            if sel_atom.can_bond(test_atom, self.toolbar.bond_order(),
+                    self.toolbar.bond_dativity()) != eng.BondingError.OK:
+                return
             self.possible_atoms(sel_atom)
             self.mode = self.Modes.ADD_LINKED_ATOM
             return
@@ -177,9 +181,9 @@ class AppContainer(tk.Tk):
             new_x = int(self.mol_canvas.coords(atomplace)[0])
             new_y = int(self.mol_canvas.coords(atomplace)[1])
             atom_connect = self.graphics[atom_s]
+            assert isinstance(atom_connect, eng.Atom)
             new_atom = self.add_atom(self.toolbar.atom_symbol(), [new_x, new_y])
-            new_bond = new_atom.bond(atom_connect, order=self.toolbar.bond_order())
-            assert not new_bond is None, "No new bond could be formed"
+            new_bond = atom_connect.bond(new_atom, order=self.toolbar.bond_order())
             self.bonds.append(new_bond)
             self.redraw_all_molecules(self.atoms, self.bonds)
             self.set_normal_mode()
