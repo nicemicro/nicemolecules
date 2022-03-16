@@ -32,19 +32,32 @@ class TopToolbar(ttk.Frame):
     def __init__(self, parent: ttk.Frame, controller: tk.Tk) -> None:
         ttk.Frame.__init__(self, parent)
         self.controller: tk.Tk = controller
-        self.mode: int = self.Modes.SELECT
+        self.mode: int = self.Modes.ADD_ATOM
         self.symbol: str = "C"
         self.bond: list[int] = [1, 0]
-        ttk.Button(self, text="Select", command=self.set_select) \
+        mode_row = ttk.Frame(self, padding="0 0 0 5")
+        mode_row.grid(row=0, column=0, columnspan=2, sticky="nsew")
+        symbol_sel = ttk.Frame(self, padding="0 0 0 5")
+        symbol_sel.grid(row=1, column=0, sticky="nsw")
+        bond_sel = ttk.Frame(self, padding="10 0 0 5")
+        bond_sel.grid(row=1, column=1, sticky="nse")
+        ttk.Button(mode_row, text="Add atom",
+                command=lambda: self.set_mode(self.Modes.ADD_ATOM)) \
+                .grid(row=0, column=0, columnspan=1)
+        ttk.Button(mode_row, text="Connect atoms",
+                command=lambda: self.set_mode(self.Modes.ADD_BOND)) \
+                .grid(row=0, column=1, columnspan=1)
+        ttk.Button(mode_row, text="Select",
+                command=lambda: self.set_mode(self.Modes.SELECT)) \
+                .grid(row=0, column=2, columnspan=1)
+        ttk.Button(symbol_sel, text="C", command=lambda: self.set_symbol("C")) \
             .grid(row=0, column=0, columnspan=1)
-        ttk.Button(self, text="C", command=lambda: self.set_add("C")) \
+        ttk.Button(symbol_sel, text="O", command=lambda: self.set_symbol("O")) \
             .grid(row=0, column=1, columnspan=1)
-        ttk.Button(self, text="O", command=lambda: self.set_add("O")) \
-            .grid(row=0, column=2, columnspan=1)
-        ttk.Button(self, text="--", command=lambda: self.set_bond([1, None])) \
-            .grid(row=0, column=3, columnspan=1)
-        ttk.Button(self, text="==", command=lambda: self.set_bond([2, None])) \
-            .grid(row=0, column=4, columnspan=1)
+        ttk.Button(bond_sel, text="--", command=lambda: self.set_bond([1, None])) \
+            .grid(row=0, column=0, columnspan=1)
+        ttk.Button(bond_sel, text="==", command=lambda: self.set_bond([2, None])) \
+            .grid(row=0, column=1, columnspan=1)
     
     def is_select(self) -> bool:
         return self.mode == self.Modes.SELECT
@@ -64,15 +77,15 @@ class TopToolbar(ttk.Frame):
     def bond_dativity(self) -> int:
         return self.bond[1]
     
-    def set_select(self) -> None:
-        self.mode = self.Modes.SELECT
+    def set_mode(self, new_mode: int = -1) -> None:
+        if new_mode == -1:
+            new_mode = self.Modes.SELECT
+        self.mode = new_mode
         
-    def set_add(self, symbol: str) -> None:
-        self.mode = self.Modes.ADD_ATOM
-        self.symbol= symbol
+    def set_symbol(self, new_symbol: str) -> None:
+        self.symbol = new_symbol
     
     def set_bond(self, bondtype: list[Optional[int]]) -> None:
-        self.mode = self.Modes.ADD_BOND
         for index, item in enumerate(bondtype):
             if not item is None:
                 self.bond[index] = item
