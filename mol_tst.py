@@ -25,13 +25,13 @@ def XH(x = "C"):
     print("bond a to b: ", a.bond(b))
     return [a, b], a.bonds
 
-def SF6(n=6):
+def SF6(n: int=6, central: str="S", terminal: str="F") -> tuple[list[eng.Atom], list[eng.Cov_bond]]:
     loc_x = [60, 100, 40, 120, 60, 100]
     loc_y = [50, 50, 80, 80, 110, 110]
-    molecules = []
-    molecules.append(eng.add_atom_by_symbol("S", [80, 80]))
+    molecules: list[eng.Atom] = []
+    molecules.append(eng.add_atom_by_symbol(central, [80, 80]))
     for x, y in zip(loc_x[0:n], loc_y[0:n]):
-        molecules.append(eng.add_atom_by_symbol("F", [x, y]))
+        molecules.append(eng.add_atom_by_symbol(terminal, [x, y]))
         molecules[-1].bond(molecules[0])
     return molecules, molecules[0].bonds
 

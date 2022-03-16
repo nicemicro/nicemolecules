@@ -7,6 +7,16 @@ Created on Mon Feb 21 15:52:19 2022
 
 from math import sqrt
 from typing import Optional, Sequence
+from enum import IntEnum, auto
+
+class BondingError(IntEnum):
+    OK = auto()
+    BOND_SELF = auto()
+    BOND_EXISTS = auto()
+    INSUFF_EL_FIRST = auto()
+    INSUFF_EL_OTHER = auto()
+    HYPERVALENT_FIRST = auto()
+    HYPERVALENT_OTHER = auto()
 
 class Cov_bond:
     def __init__(self, atoms, electrons: list[int]):
@@ -89,7 +99,7 @@ class Atom:
         desc += f"  Non-bonding electrons      : {self.nonbonding_el()}\n"
         desc += f"  Unfilled valence orbitals  : {self.empty_valence()}\n"
         desc += f"  Radicals                   : {self.radicals()}\n"
-        desc += f"  Lone pairs          : {self.lone_pairs()}\n"
+        desc += f"  Lone pairs                 : {self.lone_pairs()}\n"
         return desc
     
     def __str__(self) -> str:
@@ -98,23 +108,49 @@ class Atom:
     def __repr__(self) -> str:
         return super().__repr__() + "\n" + self.describe(True)
     
-    def bond(self, other_atom, order: int=1, dative: int=0) -> Optional[Cov_bond]:
+    def bond(self, other_atom, order: int=1, dative: int=0) -> Cov_bond:
         assert isinstance(other_atom, Atom), "Only can bond to an Atom instance"
-        if self.is_bonded(other_atom):
-            assert other_atom.is_bonded(self), "Discrepancy in bond registration to atoms"
-            print("Trying to bond with an atom already bonded with")
-            return None
-        assert not other_atom.is_bonded(self), "Discrepancy in bond registration to atoms"
+        bond_err = self.can_bond(other_atom, order, dative)
+        if bond_err != BondingError.OK:
+            raise RuntimeError(f"Bonding to atom failed. Error: {bond_err}")
         new_bond: Cov_bond = Cov_bond([self, other_atom], [order-dative, order+dative])
         self.bonds.append(new_bond)
         other_atom.register_bond(new_bond)
         return new_bond
+
+    def can_bond(self, other_atom, order: int=1, dative: int=0,
+            check_other: bool=True) -> BondingError:
+        assert isinstance(other_atom, Atom), "Only can bond to an Atom instance"
+        # We want to check whether the other atom in the list can accommodate the
+        # new bond unless check_other is False.
+        other_err = BondingError.OK
+        if check_other:
+            other_err = other_atom.can_bond(self, order, -dative, False)
+        # If there is any error from other atoms, we report that error directly.
+        if other_err != BondingError.OK:
+            return other_err
+        if other_atom == self:
+            return BondingError.BOND_SELF
+        if self.is_bonded(other_atom):
+            return BondingError.BOND_EXISTS
+        # If there are less nonbonding electrons are left than what we need
+        if self.nonbonding_el() < order-dative:
+            if check_other:
+                return BondingError.INSUFF_EL_FIRST
+            else:
+                return BondingError.INSUFF_EL_OTHER # This atom is NOT the "first"
+        if not self.hypervalent and self.empty_valence() < order+dative:
+            if check_other:
+                return BondingError.HYPERVALENT_FIRST
+            else:
+                return BondingError.HYPERVALENT_OTHER # This atom is NOT the "first"
+        return BondingError.OK
     
     def register_bond(self, new_bond: Cov_bond):
         if self in new_bond.atoms:
             self.bonds.append(new_bond)
         else:
-            assert False, "Trying to register a bond that does not work"
+            assert False, "Trying to register a bond that does not list current atom"
     
     def is_bonded(self, other_atom) -> bool:
         assert isinstance(other_atom, Atom), "Only Atom instance can be bonded to an Atom"

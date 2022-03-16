@@ -34,16 +34,16 @@ class TopToolbar(ttk.Frame):
         self.controller: tk.Tk = controller
         self.mode: int = self.Modes.SELECT
         self.symbol: str = "C"
-        self.bond: list[int] = [1]
+        self.bond: list[int] = [1, 0]
         ttk.Button(self, text="Select", command=self.set_select) \
             .grid(row=0, column=0, columnspan=1)
         ttk.Button(self, text="C", command=lambda: self.set_add("C")) \
             .grid(row=0, column=1, columnspan=1)
         ttk.Button(self, text="O", command=lambda: self.set_add("O")) \
             .grid(row=0, column=2, columnspan=1)
-        ttk.Button(self, text="--", command=lambda: self.set_bond([1])) \
+        ttk.Button(self, text="--", command=lambda: self.set_bond([1, None])) \
             .grid(row=0, column=3, columnspan=1)
-        ttk.Button(self, text="==", command=lambda: self.set_bond([2])) \
+        ttk.Button(self, text="==", command=lambda: self.set_bond([2, None])) \
             .grid(row=0, column=4, columnspan=1)
     
     def is_select(self) -> bool:
@@ -60,6 +60,9 @@ class TopToolbar(ttk.Frame):
     
     def bond_order(self) -> int:
         return self.bond[0]
+    
+    def bond_dativity(self) -> int:
+        return self.bond[1]
     
     def set_select(self) -> None:
         self.mode = self.Modes.SELECT
@@ -193,13 +196,19 @@ class AppContainer(tk.Tk):
                 selected_atom = int(tags[1].split("-")[-1])
             if len(tags) >= 1 and tags[0] == "atom":
                 selected_atom = item
-            if selected_atom == -1 or selected_atom == atom_s:
+            if selected_atom == -1:
                 self.set_normal_mode()
                 return
-            atom_connect = self.graphics[atom_s]
-            assert isinstance(atom_connect, eng.Atom), "Trying to bobd to a non-atom"
-            new_bond = atom_connect.bond(self.graphics[selected_atom],
-                                         order=self.toolbar.bond_order())
+            atom_from = self.graphics[atom_s]
+            atom_to = self.graphics[selected_atom]
+            assert isinstance(atom_from, eng.Atom), "Trying to bobd to a non-atom"
+            assert isinstance(atom_to, eng.Atom), "Trying to bobd to a non-atom"
+            if atom_from.can_bond(atom_to, self.toolbar.bond_order(),
+                    self.toolbar.bond_dativity()) != eng.BondingError.OK:
+                self.set_normal_mode()
+                return
+            new_bond = atom_from.bond(atom_to, order=self.toolbar.bond_order(),
+                    dative=self.toolbar.bond_dativity())
             assert not new_bond is None, "Creating a bond failed"
             self.bonds.append(new_bond)
             self.redraw_all_molecules(self.atoms, self.bonds)
@@ -224,7 +233,14 @@ class AppContainer(tk.Tk):
                     selected_atom = int(tags[1].split("-")[-1])
                 if len(tags) >= 1 and tags[0] == "atom":
                     selected_atom = item
-                if selected_atom == -1 or selected_atom == atom_s:
+                if selected_atom == -1:
+                    return
+                atom_from = self.graphics[selected_atom]
+                atom_to = self.graphics[atom_s]
+                assert isinstance(atom_from, eng.Atom)
+                assert isinstance(atom_to, eng.Atom)
+                if atom_from.can_bond(atom_to, self.toolbar.bond_order(),
+                        self.toolbar.bond_dativity()) != eng.BondingError.OK:
                     return
                 self.mol_canvas.itemconfigure(f"ui_help-{selected_atom}",
                                               fill="blue")
@@ -234,16 +250,17 @@ class AppContainer(tk.Tk):
         self.mol_canvas.delete("ui_help")
         self.mode = self.Modes.NORMAL
     
-    def possible_links(self, atom: eng.Atom) -> None:
+    def possible_links(self, atom_from: eng.Atom) -> None:
         for atom_link_num in self.graphics:
-            atom_link = self.graphics[atom_link_num]
-            if not isinstance(atom_link, eng.Atom):
+            atom_to = self.graphics[atom_link_num]
+            if not isinstance(atom_to, eng.Atom):
                 continue
-            if atom == atom_link:
+            if atom_from.can_bond(atom_to, self.toolbar.bond_order(),
+                    self.toolbar.bond_dativity()) != eng.BondingError.OK:
                 continue
-            self.draw_bond(atom.coord_x, atom.coord_y, atom_link.coord_x,
-                           atom_link.coord_y, -1, color="#aaaaaa",
-                           tags=("ui_help", f"ui_help-{atom_link_num}"))
+            self.draw_bond(atom_from.coord_x, atom_from.coord_y,
+                    atom_to.coord_x, atom_to.coord_y, -1, color="#aaaaaa",
+                    tags=("ui_help", f"ui_help-{atom_link_num}"))
     
     def possible_atoms(self, atom: eng.Atom) -> None:
         num = 1
