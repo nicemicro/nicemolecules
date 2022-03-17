@@ -8,6 +8,7 @@ Created on Mon Feb 21 15:52:19 2022
 from math import sqrt
 from typing import Optional, Sequence
 from enum import IntEnum, auto
+import elements as el
 
 class BondingError(IntEnum):
     OK = auto()
@@ -96,10 +97,10 @@ class Atom:
             for atom in bond.other_atoms(self):
                 desc += f"{atom.symbol} at ({atom.coord_x}, {atom.coord_y})"
             desc += "\n"
-        desc += f"  Non-bonding electrons      : {self.nonbonding_el()}\n"
-        desc += f"  Unfilled valence orbitals  : {self.empty_valence()}\n"
-        desc += f"  Radicals                   : {self.radicals()}\n"
-        desc += f"  Lone pairs                 : {self.lone_pairs()}\n"
+        desc += f"  Non-bonding electrons        : {self.nonbonding_el()}\n"
+        desc += f"  Unfilled valence orbitals    : {self.empty_valence()}\n"
+        desc += f"  Radicals                     : {self.radicals()}\n"
+        desc += f"  Lone pairs                   : {self.lone_pairs()}\n"
         return desc
     
     def __str__(self) -> str:
@@ -200,22 +201,13 @@ class Atom:
         nonbonding: int = self.nonbonding_el() - self.radicals()
         return nonbonding // 2
 
-def add_atom_by_symbol(symbol: str, coords: Sequence[float]) -> Optional[Atom] :
-    if symbol == "H":
-        return Atom("H", 1, coords, fullshell=2)
-    if symbol == "B":
-        return Atom("B", 3, coords)
-    if symbol == "C":
-        return Atom("C", 4, coords)
-    if symbol == "N":
-        return Atom("N", 5, coords)
-    if symbol == "O":
-        return Atom("O", 6, coords)
-    if symbol == "F":
-        return Atom("F", 7, coords)
-    if symbol == "S":
-        return Atom("S", 6, coords, hypervalent=True)
-    return None
+def add_atom_by_symbol(symbol: str, coords: Sequence[float]) -> Optional[Atom]:
+    element_dict = {element.symbol: element for element in el.element_table}
+    if not symbol in element_dict:
+        return None
+    sel_el = element_dict[symbol]
+    return Atom(sel_el.symbol, sel_el.valence_el, coords,
+            fullshell=sel_el.fullshell, hypervalent=sel_el.hypervalent)
 
 def find_molecule(one_atom: Atom) -> tuple:
     atomlist: list[Atom] = [one_atom]
