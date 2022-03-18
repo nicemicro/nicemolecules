@@ -187,7 +187,7 @@ class AppContainer(tk.Tk):
             closestitems = self.mol_canvas.find_closest(event.x, event.y)
             self.mol_canvas.itemconfigure("ui_help", fill="grey")
             item, tags = self.close_selection(closestitems)
-            if item is None or tags is None:
+            if item is None or tags is None or tags[0] != "ui_help":
                 self.set_normal_mode()
                 return
             atomplace = "atom_here-" + tags[1].split("-")[-1]
