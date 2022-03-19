@@ -22,6 +22,7 @@ class BondingError(IntEnum):
     HYPERVALENT_OTHER = auto()
 
 
+class CovBond:
     """
     Representing a covalent bond between atoms.
     """
@@ -104,7 +105,7 @@ class Atom:
         self.charge = 0
         self.fullshell = fullshell
         self.hypervalent = hypervalent
-        self.bonds: list[Cov_bond] = []
+        self.bonds: list[CovBond] = []
         self.coord_x: float = coords[0]
         self.coord_y: float = coords[1]
 
@@ -136,7 +137,7 @@ class Atom:
     def __repr__(self) -> str:
         return super().__repr__() + "\n" + self.describe(True)
 
-    def bond(self, other_atom, order: int = 1, dative: int = 0) -> Cov_bond:
+    def bond(self, other_atom, order: int = 1, dative: int = 0) -> CovBond:
         """
         Bonds the current atom to an other atom with the specified bond order and
         dativity (dative/coordinative bond).
@@ -145,7 +146,7 @@ class Atom:
         bond_err = self.can_bond(other_atom, order, dative)
         if bond_err != BondingError.OK:
             raise RuntimeError(f"Bonding to atom failed. Error: {bond_err}")
-        new_bond: Cov_bond = Cov_bond(
+        new_bond: CovBond = CovBond(
             [self, other_atom], [order - dative, order + dative]
         )
         self.bonds.append(new_bond)
@@ -184,9 +185,9 @@ class Atom:
                 return BondingError.HYPERVALENT_OTHER  # This atom is NOT the "first"
         return BondingError.OK
 
-    def register_bond(self, new_bond: Cov_bond):
+    def register_bond(self, new_bond: CovBond):
         """
-        Register a Cov_bond instance to this atom, created by the can_bond function
+        Register a CovBond instance to this atom, created by the can_bond function
         of an other Atom instance.
         """
         if self in new_bond.atoms:
@@ -213,7 +214,7 @@ class Atom:
                 atomlist.append(atom)
         return atomlist
 
-    def bond_instance(self, other_atom) -> Optional[Cov_bond]:
+    def bond_instance(self, other_atom) -> Optional[CovBond]:
         assert isinstance(
             other_atom, Atom
         ), "Only Atom instance can be bonded to an Atom"
@@ -265,14 +266,14 @@ def add_atom_by_symbol(symbol: str, coords: Sequence[float]) -> Optional[Atom]:
 
 def find_molecule(one_atom: Atom) -> tuple:
     atomlist: list[Atom] = [one_atom]
-    bondlist: list[Cov_bond] = []
+    bondlist: list[CovBond] = []
     current_num: int = 0
     while current_num < len(atomlist):
         current_atom: Atom = atomlist[current_num]
         for bonded_atom in current_atom.bonded_atoms():
             if not bonded_atom in atomlist:
                 atomlist.append(bonded_atom)
-            bond_instance: Optional[Cov_bond]
+            bond_instance: Optional[CovBond]
             bond_instance = current_atom.bond_instance(bonded_atom)
             if not (bond_instance is None) and (not bond_instance in bondlist):
                 bondlist.append(bond_instance)

@@ -99,8 +99,8 @@ class AppContainer(tk.Tk):
     def __init__(self, *args, **kwargs) -> None:
         tk.Tk.__init__(self, *args, **kwargs)
         self.atoms: list[eng.Atom ]= []
-        self.bonds: list[eng.Cov_bond] = []
-        self.graphics: dict[int, Union[eng.Atom, eng.Cov_bond]] = {}
+        self.bonds: list[eng.CovBond] = []
+        self.graphics: dict[int, Union[eng.Atom, eng.CovBond]] = {}
         self.selected: Optional[int] = None
         self.event_listened: bool = False
         self.mode = self.Modes.NORMAL
@@ -349,7 +349,7 @@ class AppContainer(tk.Tk):
         return bond_objects
     
     def redraw_all_molecules(self, atomlist: list[eng.Atom],
-                             bondlist: list[eng.Cov_bond]) -> None:
+                             bondlist: list[eng.CovBond]) -> None:
         self.mol_canvas.delete("all")
         self.graphics = {}
         for bond in bondlist:

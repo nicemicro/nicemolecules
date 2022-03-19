@@ -25,7 +25,7 @@ def XH(x = "C"):
     print("bond a to b: ", a.bond(b))
     return [a, b], a.bonds
 
-def SF6(n: int=6, central: str="S", terminal: str="F") -> tuple[list[eng.Atom], list[eng.Cov_bond]]:
+def SF6(n: int=6, central: str="S", terminal: str="F") -> tuple[list[eng.Atom], list[eng.CovBond]]:
     loc_x = [60, 100, 40, 120, 60, 100]
     loc_y = [50, 50, 80, 80, 110, 110]
     molecules: list[eng.Atom] = []
