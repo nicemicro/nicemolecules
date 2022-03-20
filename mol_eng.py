@@ -91,23 +91,89 @@ class Atom:
     """
     Represents an atom symbol in 2D-space in a structural formula.
     """
-    def __init__(
-        self,
-        symbol: str,
-        valence_el: int,
-        coords: Sequence[float],
-        charge: int = 0,
-        fullshell: int = 8,
-        hypervalent: bool = False,
-    ):
-        self.symbol = symbol
-        self.valence = valence_el
-        self.charge = 0
-        self.fullshell = fullshell
-        self.hypervalent = hypervalent
-        self.bonds: list[CovBond] = []
-        self.coord_x: float = coords[0]
-        self.coord_y: float = coords[1]
+
+    def get_symbol(self) -> str:
+        return self._element.symbol
+
+    def get_valence(self) -> int:
+        return self._element.valence_el - self._charge
+
+    def get_fullshell(self) -> int:
+        return self._element.fullshell
+
+    def get_hypervalent(self) -> bool:
+        return self._element.hypervalent
+
+    def get_charge(self) -> int:
+        return self._charge
+
+    def get_bonds(self) -> list[CovBond]:
+        return self._bonds
+
+    def get_bonded_atoms(self):
+        bond_list_lists = list(bond.other_atoms(self) for bond in self.bonds)
+        bond_list = [item for sublist in bond_list_lists for item in sublist]
+        atomlist: list[Atom] = []
+        for atom in bond_list:
+            if not atom in atomlist:
+                atomlist.append(atom)
+        return atomlist
+
+    def get_electrons(self) -> int:
+        from_bonds: int = 0
+        for bond in self.bonds:
+            from_bonds += bond.electron_count()
+            from_bonds -= bond.atom_electrons(self)
+        return from_bonds + self.valence
+
+    def get_nonbonding_el(self) -> int:
+        nonbonding: int = self.valence
+        for bond in self.bonds:
+            nonbonding -= bond.atom_electrons(self)
+        return nonbonding
+
+    def get_empty_valence(self) -> int:
+        return self.fullshell - self.get_electrons()
+
+    def get_radicals(self) -> int:
+        radicals: int = min(self.get_empty_valence(), self.get_nonbonding_el())
+        radicals = radicals % 2
+        return radicals
+
+    def get_lone_pairs(self) -> int:
+        nonbonding: int = self.get_nonbonding_el() - self.get_radicals()
+        return nonbonding // 2
+
+    def toss(self, new_value):
+        raise AttributeError("Can't directly modify attribute")
+
+    _element: el.Element
+    _charge: int
+    _bonds: list[CovBond]
+    coord_x: float
+    coord_y: float
+    symbol = property(get_symbol, toss)
+    valence = property(get_valence, toss)
+    fullshell = property(get_fullshell, toss)
+    hypervalent = property(get_hypervalent, toss)
+    charge = property(get_charge, toss)
+    bonds = property(get_bonds, toss)
+    bonded_atoms = property(get_bonded_atoms, toss)
+    electrons = property(get_electrons, toss)
+    nonbonding_el = property(get_nonbonding_el, toss)
+    empty_valence = property(get_empty_valence, toss)
+    radicals = property(get_radicals, toss)
+    lone_pairs = property(get_lone_pairs, toss)
+
+    def __init__(self,
+                 element: el.Element,
+                 coords: Sequence[float],
+                 charge: int = 0):
+        self._element = element
+        self._charge = charge
+        self._bonds = []
+        self.coord_x = coords[0]
+        self.coord_y = coords[1]
 
     def describe(self, short: bool = False) -> str:
         desc: str = f"{self.symbol} atom at ({self.coord_x}, {self.coord_y})"
@@ -118,17 +184,17 @@ class Atom:
         desc += f"  Base charge                  : {self.charge}\n"
         desc += f"  Electrons to fill shell      : {self.fullshell}\n"
         desc += f"  Can be hypervalent           : {self.hypervalent}\n"
+        desc += f"  Total valence electron number: {self.electrons}\n"
         desc += f"  Number of covalent bonds     : {len(self.bonds)}\n"
-        desc += f"  Total valence electron number: {self.electrons()}\n"
         for bond in self.bonds:
             desc += f"    {bond.order()} order bond with "
             for atom in bond.other_atoms(self):
                 desc += f"{atom.symbol} at ({atom.coord_x}, {atom.coord_y})"
             desc += "\n"
-        desc += f"  Non-bonding electrons        : {self.nonbonding_el()}\n"
-        desc += f"  Unfilled valence orbitals    : {self.empty_valence()}\n"
-        desc += f"  Radicals                     : {self.radicals()}\n"
-        desc += f"  Lone pairs                   : {self.lone_pairs()}\n"
+        desc += f"  Non-bonding electrons        : {self.nonbonding_el}\n"
+        desc += f"  Unfilled valence orbitals    : {self.empty_valence}\n"
+        desc += f"  Radicals                     : {self.radicals}\n"
+        desc += f"  Lone pairs                   : {self.lone_pairs}\n"
         return desc
 
     def __str__(self) -> str:
@@ -142,24 +208,27 @@ class Atom:
         Bonds the current atom to an other atom with the specified bond order and
         dativity (dative/coordinative bond).
         """
-        assert isinstance(other_atom, Atom), "Only can bond to an Atom instance"
+        assert isinstance(other_atom,
+                          Atom), "Only can bond to an Atom instance"
         bond_err = self.can_bond(other_atom, order, dative)
         if bond_err != BondingError.OK:
             raise RuntimeError(f"Bonding to atom failed. Error: {bond_err}")
-        new_bond: CovBond = CovBond(
-            [self, other_atom], [order - dative, order + dative]
-        )
+        new_bond: CovBond = CovBond([self, other_atom],
+                                    [order - dative, order + dative])
         self.bonds.append(new_bond)
         other_atom.register_bond(new_bond)
         return new_bond
 
-    def can_bond(
-        self, other_atom, order: int = 1, dative: int = 0, check_other: bool = True
-    ) -> BondingError:
+    def can_bond(self,
+                 other_atom,
+                 order: int = 1,
+                 dative: int = 0,
+                 check_other: bool = True) -> BondingError:
         """
         A check whether a bond can be created between the current atom and an other atom.
         """
-        assert isinstance(other_atom, Atom), "Only can bond to an Atom instance"
+        assert isinstance(other_atom,
+                          Atom), "Only can bond to an Atom instance"
         # We want to check whether the other atom in the list can accommodate the
         # new bond unless check_other is False.
         other_err = BondingError.OK
@@ -173,12 +242,12 @@ class Atom:
         if self.is_bonded(other_atom):
             return BondingError.BOND_EXISTS
         # If there are less nonbonding electrons are left than what we need
-        if self.nonbonding_el() < order - dative:
+        if self.nonbonding_el < order - dative:
             if check_other:
                 return BondingError.INSUFF_EL_FIRST
             else:
                 return BondingError.INSUFF_EL_OTHER  # This atom is NOT the "first"
-        if not self.hypervalent and self.empty_valence() < order + dative:
+        if not self.hypervalent and self.empty_valence < order + dative:
             if check_other:
                 return BondingError.HYPERVALENT_FIRST
             else:
@@ -199,55 +268,21 @@ class Atom:
         """
         Checks whether a bond between this, and an other Atom instance exists.
         """
-        assert isinstance(
-            other_atom, Atom
-        ), "Only Atom instance can be bonded to an Atom"
+        assert isinstance(other_atom,
+                          Atom), "Only Atom instance can be bonded to an Atom"
         bond_list_lists = list(bond.other_atoms(self) for bond in self.bonds)
-        return other_atom in [item for sublist in bond_list_lists for item in sublist]
-
-    def bonded_atoms(self):
-        bond_list_lists = list(bond.other_atoms(self) for bond in self.bonds)
-        bond_list = [item for sublist in bond_list_lists for item in sublist]
-        atomlist: list[Atom] = []
-        for atom in bond_list:
-            if not atom in atomlist:
-                atomlist.append(atom)
-        return atomlist
+        return other_atom in [
+            item for sublist in bond_list_lists for item in sublist
+        ]
 
     def bond_instance(self, other_atom) -> Optional[CovBond]:
-        assert isinstance(
-            other_atom, Atom
-        ), "Only Atom instance can be bonded to an Atom"
+        assert isinstance(other_atom,
+                          Atom), "Only Atom instance can be bonded to an Atom"
         for bond in self.bonds:
             if other_atom in bond.other_atoms(self):
                 return bond
         else:
             return None
-
-    def electrons(self) -> int:
-        from_bonds: int = 0
-        for bond in self.bonds:
-            from_bonds += bond.electron_count()
-            from_bonds -= bond.atom_electrons(self)
-        return from_bonds + self.valence
-
-    def nonbonding_el(self) -> int:
-        nonbonding: int = self.valence
-        for bond in self.bonds:
-            nonbonding -= bond.atom_electrons(self)
-        return nonbonding
-
-    def empty_valence(self) -> int:
-        return self.fullshell - self.electrons()
-
-    def radicals(self) -> int:
-        radicals: int = min(self.empty_valence(), self.nonbonding_el())
-        radicals = radicals % 2
-        return radicals
-
-    def lone_pairs(self) -> int:
-        nonbonding: int = self.nonbonding_el() - self.radicals()
-        return nonbonding // 2
 
 
 def add_atom_by_symbol(symbol: str, coords: Sequence[float]) -> Optional[Atom]:
@@ -255,13 +290,7 @@ def add_atom_by_symbol(symbol: str, coords: Sequence[float]) -> Optional[Atom]:
     if not symbol in element_dict:
         return None
     sel_el = element_dict[symbol]
-    return Atom(
-        sel_el.symbol,
-        sel_el.valence_el,
-        coords,
-        fullshell=sel_el.fullshell,
-        hypervalent=sel_el.hypervalent,
-    )
+    return Atom(sel_el, coords)
 
 
 def find_molecule(one_atom: Atom) -> tuple:

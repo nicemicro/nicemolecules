@@ -7,10 +7,11 @@ Created on Thu Mar 10 07:43:08 2022
 """
 
 import mol_eng as eng
+import elements as el
 
 def carbon_monoxide():
-    a = eng.Atom("C", 4, [20, 20], 0)
-    b = eng.Atom("O", 6, [40, 20], 0)
+    a = eng.Atom(el.Carbon(), [20, 20])
+    b = eng.Atom(el.Oxygen(), [40, 20])
     print(a)
     print(b)
     print("bond a to b: ", a.bond(b, 3, 1))
@@ -20,6 +21,8 @@ def carbon_monoxide():
 def XH(x = "C"):
     a = eng.add_atom_by_symbol(x, [20, 20])
     b = eng.add_atom_by_symbol("H", [40, 20])
+    assert isinstance(a, eng.Atom)
+    assert isinstance(b, eng.Atom)
     print(a)
     print(b)
     print("bond a to b: ", a.bond(b))
@@ -29,54 +32,27 @@ def SF6(n: int=6, central: str="S", terminal: str="F") -> tuple[list[eng.Atom], 
     loc_x = [60, 100, 40, 120, 60, 100]
     loc_y = [50, 50, 80, 80, 110, 110]
     molecules: list[eng.Atom] = []
-    molecules.append(eng.add_atom_by_symbol(central, [80, 80]))
+    new_atom = eng.add_atom_by_symbol(central, [80, 80])
+    assert isinstance(new_atom, eng.Atom)
+    molecules.append(new_atom)
     for x, y in zip(loc_x[0:n], loc_y[0:n]):
-        molecules.append(eng.add_atom_by_symbol(terminal, [x, y]))
+        new_atom = eng.add_atom_by_symbol(terminal, [x, y])
+        assert isinstance(new_atom, eng.Atom)
+        molecules.append(new_atom)
         molecules[-1].bond(molecules[0])
     return molecules, molecules[0].bonds
 
 def methane():
-    a = eng.Atom("C", 4, [40, 40])
-    b = eng.Atom("H", 1, [20, 40], fullshell=2)
-    c = eng.Atom("H", 1, [40, 20], fullshell=2)
-    d = eng.Atom("H", 1, [20, 60], fullshell=2)
-    e = eng.Atom("H", 1, [60, 20], fullshell=2)
+    a = eng.Atom(el.Carbon(), [40, 40])
+    b = eng.Atom(el.Hydrogen(), [20, 40])
+    c = eng.Atom(el.Hydrogen(), [40, 40])
+    d = eng.Atom(el.Hydrogen(), [20, 40])
+    e = eng.Atom(el.Hydrogen(), [20, 40])
     a.bond(b)
     a.bond(c)
     a.bond(d)
     a.bond(e)
     return [a, b, c, d, e], a.bonds
-
-def compl():
-    molecules = []
-    bonds = []
-    molecules.append(eng.Atom("C", 4, [40, 40]))
-    for index in range(4):
-        molecules.append(eng.Atom("H", 1, [20 + (index % 2)*40, 20+(index // 2)*40], fullshell=2))
-        new_bond = molecules[-1].bond(molecules[0])
-        bonds.append(new_bond)
-    molecules.append(eng.Atom("C", 4, [40, 150]))
-    molecules.append(eng.Atom("O", 6, [70, 140]))
-    new_bond = molecules[-2].bond(molecules[-1], 3, 1)
-    bonds.append(new_bond)
-    carbons = []
-    hydrogens = []
-    for index in range(3):
-        carbons.append(eng.Atom("C", 4, [120+index*30, 60]))
-        if len(carbons) > 1:
-            new_bond = carbons[-1].bond(carbons[-2])
-            bonds.append(new_bond)
-        for index2 in range(2):
-            hydrogens.append(eng.Atom("H", 1, [120+index*30, 30+index2*60], fullshell=2))
-            new_bond = hydrogens[-1].bond(carbons[-1])
-            bonds.append(new_bond)
-    hydrogens.append(eng.Atom("H", 1, [210, 60], fullshell=2))
-    new_bond = hydrogens[-1].bond(carbons[-1])
-    bonds.append(new_bond)
-    hydrogens.append(eng.Atom("H", 1, [90, 60], fullshell=2))
-    new_bond = hydrogens[-1].bond(carbons[0])
-    bonds.append(new_bond)
-    return molecules + carbons + hydrogens, bonds
 
 def description(atoms, to_show = None):
     if to_show is None:
