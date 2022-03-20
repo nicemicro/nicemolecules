@@ -27,12 +27,57 @@ class CovBond:
     Representing a covalent bond between atoms.
     """
 
+    def get_order(self) -> float:
+        """Returns the bond order of this bond."""
+        return sum(self.electrons) / len(self.atoms)
+
+    def get_dativity(self) -> float:
+        """Returns the dativity of this bond."""
+        return (self.electrons[0] - self.electrons[1]) / 2
+
+    def get_electron_count(self) -> int:
+        """Returns the number of electrons participating in the formation of this bond."""
+        return sum(self.electrons)
+
+    def get_coords(self) -> tuple[float, float, float, float]:
+        """returns the coordinates of the bond."""
+        return (
+            self.atoms[0].coord_x,
+            self.atoms[0].coord_y,
+            self.atoms[1].coord_x,
+            self.atoms[1].coord_y,
+        )
+
+    def get_length(self) -> float:
+        if len(self.atoms) < 2:
+            return 0
+        xdiff: float = self.atoms[0].coord_x - self.atoms[1].coord_x
+        ydiff: float = self.atoms[0].coord_y - self.atoms[1].coord_y
+        return sqrt(xdiff**2 + ydiff**2)
+
+    def get_atoms(self):
+        return self._atoms
+
+    def get_electrons(self) -> list[int]:
+        return self._electrons
+
+    def toss(self, new_value):
+        raise AttributeError("Can't directly modify attribute")
+
+    order = property(get_order, toss)
+    dativity = property(get_dativity, toss)
+    electron_count = property(get_electron_count, toss)
+    coords = property(get_coords, toss)
+    length = property(get_length, toss)
+    atoms = property(get_atoms, toss)
+    electrons = property(get_electrons, toss)
+
     def __init__(self, atoms, electrons: list[int]):
-        self.atoms: list[Atom] = atoms
-        self.electrons: list[int] = electrons
+        self._atoms: list[Atom] = atoms
+        self._electrons: list[int] = electrons
 
     def describe(self) -> str:
-        desc = f"Bond order: {self.order()}\n"
+        desc = f"Bond order: {self.order}\n"
         for atom, electron in zip(self.atoms, self.electrons):
             desc += f"  Atom symbol: {atom.symbol}"
             desc += f" at ({atom.coord_x}, {atom.coord_y}) with {electron} electrons\n"
@@ -43,18 +88,6 @@ class CovBond:
 
     def __repr__(self) -> str:
         return super().__repr__() + "\n" + self.describe()
-
-    def order(self) -> float:
-        """Returns the bond order of this bond."""
-        return sum(self.electrons) / len(self.atoms)
-
-    def dativity(self) -> float:
-        """Returns the dativity of this bond."""
-        return (self.electrons[0] - self.electrons[1]) / 2
-
-    def electron_count(self) -> int:
-        """Returns the number of electrons participating in the formation of this bond."""
-        return sum(self.electrons)
 
     def atom_electrons(self, one_atom):
         """Returns the number of electrons from a certain atom that was donated to this bond."""
@@ -69,22 +102,6 @@ class CovBond:
         if not one_atom in self.atoms:
             return None
         return list(atom for atom in self.atoms if atom != one_atom)
-
-    def coords(self) -> tuple[float, float, float, float]:
-        """returns the coordinates of the bond."""
-        return (
-            self.atoms[0].coord_x,
-            self.atoms[0].coord_y,
-            self.atoms[1].coord_x,
-            self.atoms[1].coord_y,
-        )
-
-    def length(self) -> float:
-        if len(self.atoms) < 2:
-            return 0
-        xdiff: float = self.atoms[0].coord_x - self.atoms[1].coord_x
-        ydiff: float = self.atoms[0].coord_y - self.atoms[1].coord_y
-        return sqrt(xdiff**2 + ydiff**2)
 
 
 class Atom:
@@ -122,7 +139,7 @@ class Atom:
     def get_electrons(self) -> int:
         from_bonds: int = 0
         for bond in self.bonds:
-            from_bonds += bond.electron_count()
+            from_bonds += bond.electron_count
             from_bonds -= bond.atom_electrons(self)
         return from_bonds + self.valence
 
@@ -187,7 +204,7 @@ class Atom:
         desc += f"  Total valence electron number: {self.electrons}\n"
         desc += f"  Number of covalent bonds     : {len(self.bonds)}\n"
         for bond in self.bonds:
-            desc += f"    {bond.order()} order bond with "
+            desc += f"    {bond.order} order bond with "
             for atom in bond.other_atoms(self):
                 desc += f"{atom.symbol} at ({atom.coord_x}, {atom.coord_y})"
             desc += "\n"

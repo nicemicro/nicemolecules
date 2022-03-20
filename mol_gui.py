@@ -353,12 +353,12 @@ class AppContainer(tk.Tk):
         self.mol_canvas.delete("all")
         self.graphics = {}
         for bond in bondlist:
-            x1, y1, x2, y2 = bond.coords()
-            bondlen = bond.length()
+            x1, y1, x2, y2 = bond.coords
+            bondlen = bond.length
             if bondlen == 0:
                 continue
-            bond_order = bond.order()
-            dativity = bond.dativity()
+            bond_order = bond.order
+            dativity = bond.dativity
             bond_drawings = self.draw_bond(x1, y1, x2, y2, bondlen, 
                                            bond_order, dativity, tags=("bond", ))
             for bondid in bond_drawings:

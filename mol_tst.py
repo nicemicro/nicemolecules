@@ -60,7 +60,7 @@ def description(atoms, to_show = None):
     for show_this in to_show:
         print(atoms[show_this].describe())
         print(atoms[show_this].bonds)
-        print(atoms[show_this].bonds[0].dativity())
+        print(atoms[show_this].bonds[0].dativity)
 
 if __name__ == '__main__':
     #molecules, bonds = carbon_monoxide()
