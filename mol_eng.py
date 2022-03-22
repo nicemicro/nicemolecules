@@ -13,6 +13,7 @@ import elements as el
 
 class BondingError(IntEnum):
     """Reasons a bond formation might be impossible."""
+
     OK = auto()
     BOND_SELF = auto()
     BOND_EXISTS = auto()
@@ -40,7 +41,7 @@ class CovBond:
         return sum(self.electrons)
 
     def get_coords(self) -> tuple[float, float, float, float]:
-        """returns the coordinates of the bond."""
+        """Returns the coordinates of the bond."""
         return (
             self.atoms[0].coord_x,
             self.atoms[0].coord_y,
@@ -49,6 +50,7 @@ class CovBond:
         )
 
     def get_length(self) -> float:
+        """Returns the length of the bond."""
         if len(self.atoms) < 2:
             return 0
         xdiff: float = self.atoms[0].coord_x - self.atoms[1].coord_x
@@ -56,12 +58,15 @@ class CovBond:
         return sqrt(xdiff**2 + ydiff**2)
 
     def get_atoms(self):
+        """Returns the atoms constituting this bond."""
         return self._atoms
 
     def get_electrons(self) -> list[int]:
+        """Returns the number of electrons constituting this bond."""
         return self._electrons
 
-    def toss(self, new_value):
+    def toss(self, new_value) -> None:
+        """Prohibits changing attributes."""
         raise AttributeError("Can't directly modify attribute")
 
     order = property(get_order, toss)
@@ -77,6 +82,7 @@ class CovBond:
         self._electrons: list[int] = electrons
 
     def describe(self) -> str:
+        """Returns a string description of the bond."""
         desc = f"Bond order: {self.order}\n"
         for atom, electron in zip(self.atoms, self.electrons):
             desc += f"  Atom symbol: {atom.symbol}"
@@ -102,6 +108,12 @@ class CovBond:
         if not one_atom in self.atoms:
             return None
         return list(atom for atom in self.atoms if atom != one_atom)
+
+    def delete(self):
+        """Removes itself from the atoms it was bonded to"""
+        for connected_atom in self.atoms:
+            connected_atom.remove_bond(self)
+        self._atoms = []
 
 
 class Atom:
@@ -182,10 +194,7 @@ class Atom:
     radicals = property(get_radicals, toss)
     lone_pairs = property(get_lone_pairs, toss)
 
-    def __init__(self,
-                 element: el.Element,
-                 coords: Sequence[float],
-                 charge: int = 0):
+    def __init__(self, element: el.Element, coords: Sequence[float], charge: int = 0):
         self._element = element
         self._charge = charge
         self._bonds = []
@@ -225,27 +234,24 @@ class Atom:
         Bonds the current atom to an other atom with the specified bond order and
         dativity (dative/coordinative bond).
         """
-        assert isinstance(other_atom,
-                          Atom), "Only can bond to an Atom instance"
+        assert isinstance(other_atom, Atom), "Only can bond to an Atom instance"
         bond_err = self.can_bond(other_atom, order, dative)
         if bond_err != BondingError.OK:
             raise RuntimeError(f"Bonding to atom failed. Error: {bond_err}")
-        new_bond: CovBond = CovBond([self, other_atom],
-                                    [order - dative, order + dative])
+        new_bond: CovBond = CovBond(
+            [self, other_atom], [order - dative, order + dative]
+        )
         self.bonds.append(new_bond)
         other_atom.register_bond(new_bond)
         return new_bond
 
-    def can_bond(self,
-                 other_atom,
-                 order: int = 1,
-                 dative: int = 0,
-                 check_other: bool = True) -> BondingError:
+    def can_bond(
+        self, other_atom, order: int = 1, dative: int = 0, check_other: bool = True
+    ) -> BondingError:
         """
         A check whether a bond can be created between the current atom and an other atom.
         """
-        assert isinstance(other_atom,
-                          Atom), "Only can bond to an Atom instance"
+        assert isinstance(other_atom, Atom), "Only can bond to an Atom instance"
         # We want to check whether the other atom in the list can accommodate the
         # new bond unless check_other is False.
         other_err = BondingError.OK
@@ -271,6 +277,14 @@ class Atom:
                 return BondingError.HYPERVALENT_OTHER  # This atom is NOT the "first"
         return BondingError.OK
 
+    def remove_bond(self, bond_instance: CovBond) -> None:
+        """Removes a bond instance registered to this atom as a part of deleting
+        a bond."""
+        assert (
+            bond_instance in self.bonds
+        ), "Bond trying to be deleted is not registered to this atom"
+        self._bonds.remove(bond_instance)
+
     def register_bond(self, new_bond: CovBond):
         """
         Register a CovBond instance to this atom, created by the can_bond function
@@ -285,16 +299,16 @@ class Atom:
         """
         Checks whether a bond between this, and an other Atom instance exists.
         """
-        assert isinstance(other_atom,
-                          Atom), "Only Atom instance can be bonded to an Atom"
+        assert isinstance(
+            other_atom, Atom
+        ), "Only Atom instance can be bonded to an Atom"
         bond_list_lists = list(bond.other_atoms(self) for bond in self.bonds)
-        return other_atom in [
-            item for sublist in bond_list_lists for item in sublist
-        ]
+        return other_atom in [item for sublist in bond_list_lists for item in sublist]
 
     def bond_instance(self, other_atom) -> Optional[CovBond]:
-        assert isinstance(other_atom,
-                          Atom), "Only Atom instance can be bonded to an Atom"
+        assert isinstance(
+            other_atom, Atom
+        ), "Only Atom instance can be bonded to an Atom"
         for bond in self.bonds:
             if other_atom in bond.other_atoms(self):
                 return bond
