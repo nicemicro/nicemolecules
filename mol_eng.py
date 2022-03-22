@@ -30,6 +30,8 @@ class CovBond:
 
     def get_order(self) -> float:
         """Returns the bond order of this bond."""
+        if not self.atoms:
+            return 0
         return sum(self.electrons) / len(self.atoms)
 
     def get_dativity(self) -> float:
@@ -285,7 +287,7 @@ class Atom:
         ), "Bond trying to be deleted is not registered to this atom"
         self._bonds.remove(bond_instance)
 
-    def register_bond(self, new_bond: CovBond):
+    def register_bond(self, new_bond: CovBond) -> None:
         """
         Register a CovBond instance to this atom, created by the can_bond function
         of an other Atom instance.
@@ -306,15 +308,23 @@ class Atom:
         return other_atom in [item for sublist in bond_list_lists for item in sublist]
 
     def bond_instance(self, other_atom) -> Optional[CovBond]:
+        """Returns the bond instance connecting the current atom to the other_atom.
+        If there is no bond, returns None."""
         assert isinstance(
             other_atom, Atom
         ), "Only Atom instance can be bonded to an Atom"
         for bond in self.bonds:
             if other_atom in bond.other_atoms(self):
                 return bond
-        else:
-            return None
+        return None
 
+    def unbond_all(self) -> list[CovBond]:
+        """Removes all bonds from the atom. Returns the instances of the now
+        unused bonds."""
+        bonds_loop: list[CovBond] = self._bonds.copy()
+        for bond in bonds_loop:
+            bond.delete()
+        return bonds_loop
 
 def add_atom_by_symbol(symbol: str, coords: Sequence[float]) -> Optional[Atom]:
     element_dict = {element.symbol: element for element in el.element_table}
