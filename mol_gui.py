@@ -118,9 +118,33 @@ class AppContainer(tk.Tk):
                                     bg="white")
         self.mol_canvas.grid(row=1, column=0, sticky="nsew")
         self.mol_canvas.bind("<Button-1>", self.leftclick_canvas)
+        self.bind("<Delete>", self.delkey_pressed)
         
         #self.atoms, self.bonds = tst.SF6()
-        #self.redraw_all_molecules(self.atoms, self.bonds)
+        #self.redraw_all()
+    
+    def delkey_pressed(self, event: tk.Event) -> None:
+        if self.mode == self.Modes.NORMAL and self.selected:
+            for sel_num in self.selected:
+                if sel_num not in self.graphics:
+                    continue
+                sel_item = self.graphics[sel_num]
+                if isinstance(sel_item, eng.Atom):
+                    removed_bonds = sel_item.unbond_all()
+                    self.graphics = {key: obj for key, obj in
+                                     self.graphics.items() if obj != sel_item}
+                    self.atoms.remove(sel_item)
+                    for removed_bond in removed_bonds:
+                        self.graphics = {key: obj for key, obj in
+                                         self.graphics.items() if obj != removed_bond}
+                        self.bonds.remove(removed_bond)
+                elif isinstance(sel_item, eng.CovBond):
+                    sel_item.delete()
+                    self.graphics = {key: obj for key, obj in
+                                     self.graphics.items() if obj != sel_item}
+                    self.bonds.remove(sel_item)
+            self.selected = []
+            self.redraw_all()
     
     def leftclick_canvas(self, event: tk.Event) -> None:
         if self.event_listened:
@@ -188,7 +212,7 @@ class AppContainer(tk.Tk):
             new_atom = self.add_atom(self.toolbar.atom_symbol(), [new_x, new_y])
             new_bond = atom_connect.bond(new_atom, order=self.toolbar.bond_order())
             self.bonds.append(new_bond)
-            self.redraw_all_molecules(self.atoms, self.bonds)
+            self.redraw_all()
             self.set_normal_mode()
         if self.mode == self.Modes.LINK_ATOMS:
             closestitems = self.mol_canvas.find_closest(event.x, event.y)
@@ -218,7 +242,7 @@ class AppContainer(tk.Tk):
                     dative=self.toolbar.bond_dativity())
             assert not new_bond is None, "Creating a bond failed"
             self.bonds.append(new_bond)
-            self.redraw_all_molecules(self.atoms, self.bonds)
+            self.redraw_all()
             self.set_normal_mode()
     
     def drag_atom(self, atom_s: int, event: tk.Event) -> None:
@@ -328,7 +352,7 @@ class AppContainer(tk.Tk):
         new_atom = eng.add_atom_by_symbol(atom_symbol, coords)
         assert not new_atom is None, "Unknown symbol probably"
         self.atoms.append(new_atom)
-        self.redraw_all_molecules(self.atoms, self.bonds)
+        self.redraw_all()
         return new_atom
 
     def draw_bond(self, x1: float, y1: float, x2: float, y2: float,
@@ -368,12 +392,11 @@ class AppContainer(tk.Tk):
             bond_objects.append(bond_line_id)
         return bond_objects
     
-    def redraw_all_molecules(self, atomlist: list[eng.Atom],
-                             bondlist: list[eng.CovBond]) -> None:
+    def redraw_all(self) -> None:
         self.mol_canvas.delete("all")
         self.graphics = {}
         bond_id: int = 0
-        for bond in bondlist:
+        for bond in self.bonds:
             x1, y1, x2, y2 = bond.coords
             bondlen = bond.length
             if bondlen == 0:
@@ -386,7 +409,7 @@ class AppContainer(tk.Tk):
             for bondid in bond_drawings:
                 self.graphics[bondid] = bond
             bond_id += 1
-        for atom in atomlist:
+        for atom in self.atoms:
             atom_s: int = self.mol_canvas.create_text(atom.coord_x, atom.coord_y,
                                                      text=atom.symbol,
                                                      justify="center",
