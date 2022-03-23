@@ -138,6 +138,12 @@ class Atom:
     def get_charge(self) -> int:
         return self._charge
 
+    def set_charge(self, new_charge: int) -> None:
+        err: BondingError = self.can_ionize(new_charge)
+        if err != BondingError.OK:
+            raise RuntimeError(f"Bonding to atom failed. Error: {err}")
+        self._charge = new_charge
+
     def get_bonds(self) -> list[CovBond]:
         return self._bonds
 
@@ -187,7 +193,7 @@ class Atom:
     valence = property(get_valence, toss)
     fullshell = property(get_fullshell, toss)
     hypervalent = property(get_hypervalent, toss)
-    charge = property(get_charge, toss)
+    charge = property(get_charge, set_charge)
     bonds = property(get_bonds, toss)
     bonded_atoms = property(get_bonded_atoms, toss)
     electrons = property(get_electrons, toss)
@@ -198,13 +204,19 @@ class Atom:
 
     def __init__(self, element: el.Element, coords: Sequence[float], charge: int = 0):
         self._element = element
-        self._charge = charge
+        self.charge = charge
         self._bonds = []
         self.coord_x = coords[0]
         self.coord_y = coords[1]
 
     def describe(self, short: bool = False) -> str:
-        desc: str = f"{self.symbol} atom at ({self.coord_x}, {self.coord_y})"
+        charge_str: str = ""
+        if self.charge > 0:
+            charge_str = self.charge * "+"
+        elif self.charge < 0:
+            charge_str = (-self.charge) * "-"
+        desc: str = f"{self.symbol}{charge_str} atom at "
+        desc += f"({self.coord_x}, {self.coord_y})"
         if short:
             return desc
         desc += "\n"
@@ -230,6 +242,32 @@ class Atom:
 
     def __repr__(self) -> str:
         return super().__repr__() + "\n" + self.describe(True)
+
+    def can_change_element(self, element: el.Element) -> BondingError:
+        in_bonds: int = 0
+        donate_bond: int = 0
+        for bond in self.bonds:
+            in_bonds += bond.electron_count
+            donate_bond += bond.atom_electrons(self)
+        total_prosp_el = in_bonds - donate_bond + element.valence_el - self.charge
+        if not element.hypervalent and total_prosp_el > element.fullshell:
+            return BondingError.HYPERVALENT_FIRST
+        if donate_bond + self.charge > element.valence_el:
+            return BondingError.INSUFF_EL_FIRST
+        return BondingError.OK
+
+    def change_element(self, new_element: el.Element) -> None:
+        err: BondingError = self.can_change_element(new_element)
+        if err != BondingError.OK:
+            raise RuntimeError(f"Bonding to atom failed. Error: {err}")
+        self._element = new_element
+
+    def can_ionize(self, charge: int = 0) -> BondingError:
+        if self._element.valence_el - charge < 0:
+            return BondingError.INSUFF_EL_FIRST
+        if self._element.valence_el - charge > self.fullshell:
+            return BondingError.HYPERVALENT_FIRST
+        return BondingError.OK
 
     def bond(self, other_atom, order: int = 1, dative: int = 0) -> CovBond:
         """
@@ -325,6 +363,7 @@ class Atom:
         for bond in bonds_loop:
             bond.delete()
         return bonds_loop
+
 
 def add_atom_by_symbol(symbol: str, coords: Sequence[float]) -> Optional[Atom]:
     element_dict = {element.symbol: element for element in el.element_table}
