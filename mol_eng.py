@@ -202,7 +202,10 @@ class Atom:
     radicals = property(get_radicals, toss)
     lone_pairs = property(get_lone_pairs, toss)
 
-    def __init__(self, element: el.Element, coords: Sequence[float], charge: int = 0):
+    def __init__(self,
+                 element: el.Element,
+                 coords: Sequence[float],
+                 charge: int = 0):
         self._element = element
         self.charge = charge
         self._bonds = []
@@ -274,24 +277,27 @@ class Atom:
         Bonds the current atom to an other atom with the specified bond order and
         dativity (dative/coordinative bond).
         """
-        assert isinstance(other_atom, Atom), "Only can bond to an Atom instance"
+        assert isinstance(other_atom,
+                          Atom), "Only can bond to an Atom instance"
         bond_err = self.can_bond(other_atom, order, dative)
         if bond_err != BondingError.OK:
             raise RuntimeError(f"Bonding to atom failed. Error: {bond_err}")
-        new_bond: CovBond = CovBond(
-            [self, other_atom], [order - dative, order + dative]
-        )
+        new_bond: CovBond = CovBond([self, other_atom],
+                                    [order - dative, order + dative])
         self.bonds.append(new_bond)
         other_atom.register_bond(new_bond)
         return new_bond
 
-    def can_bond(
-        self, other_atom, order: int = 1, dative: int = 0, check_other: bool = True
-    ) -> BondingError:
+    def can_bond(self,
+                 other_atom,
+                 order: int = 1,
+                 dative: int = 0,
+                 check_other: bool = True) -> BondingError:
         """
         A check whether a bond can be created between the current atom and an other atom.
         """
-        assert isinstance(other_atom, Atom), "Only can bond to an Atom instance"
+        assert isinstance(other_atom,
+                          Atom), "Only can bond to an Atom instance"
         # We want to check whether the other atom in the list can accommodate the
         # new bond unless check_other is False.
         other_err = BondingError.OK
@@ -320,9 +326,8 @@ class Atom:
     def remove_bond(self, bond_instance: CovBond) -> None:
         """Removes a bond instance registered to this atom as a part of deleting
         a bond."""
-        assert (
-            bond_instance in self.bonds
-        ), "Bond trying to be deleted is not registered to this atom"
+        assert (bond_instance in self.bonds
+                ), "Bond trying to be deleted is not registered to this atom"
         self._bonds.remove(bond_instance)
 
     def register_bond(self, new_bond: CovBond) -> None:
@@ -339,18 +344,18 @@ class Atom:
         """
         Checks whether a bond between this, and an other Atom instance exists.
         """
-        assert isinstance(
-            other_atom, Atom
-        ), "Only Atom instance can be bonded to an Atom"
+        assert isinstance(other_atom,
+                          Atom), "Only Atom instance can be bonded to an Atom"
         bond_list_lists = list(bond.other_atoms(self) for bond in self.bonds)
-        return other_atom in [item for sublist in bond_list_lists for item in sublist]
+        return other_atom in [
+            item for sublist in bond_list_lists for item in sublist
+        ]
 
     def bond_instance(self, other_atom) -> Optional[CovBond]:
         """Returns the bond instance connecting the current atom to the other_atom.
         If there is no bond, returns None."""
-        assert isinstance(
-            other_atom, Atom
-        ), "Only Atom instance can be bonded to an Atom"
+        assert isinstance(other_atom,
+                          Atom), "Only Atom instance can be bonded to an Atom"
         for bond in self.bonds:
             if other_atom in bond.other_atoms(self):
                 return bond
@@ -372,6 +377,7 @@ def element_by_symbol(symbol: str) -> Optional[el.Element]:
         return None
     return element_dict[symbol]
 
+
 def add_atom_by_symbol(symbol: str, coords: Sequence[float]) -> Optional[Atom]:
     """Returns a new atom instance specified by its symbol and coordinates."""
     sel_el: Optional[el.Element] = element_by_symbol(symbol)
@@ -379,6 +385,7 @@ def add_atom_by_symbol(symbol: str, coords: Sequence[float]) -> Optional[Atom]:
         return None
     assert isinstance(sel_el, el.Element)
     return Atom(sel_el, coords)
+
 
 def find_molecule(one_atom: Atom) -> tuple:
     """Finds all CovBond and Atom instances that are somehow connected to the
