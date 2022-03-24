@@ -83,6 +83,7 @@ class TopToolbar(ttk.Frame):
         self.mode = new_mode
         
     def set_symbol(self, new_symbol: str) -> None:
+        self.event_generate("<<AtomButtonPress>>", when="tail")
         self.symbol = new_symbol
     
     def set_bond(self, bondtype: list[Optional[int]]) -> None:
@@ -119,9 +120,30 @@ class AppContainer(tk.Tk):
         self.mol_canvas.grid(row=1, column=0, sticky="nsew")
         self.mol_canvas.bind("<Button-1>", self.leftclick_canvas)
         self.bind("<Delete>", self.delkey_pressed)
+        self.bind("<<AtomButtonPress>>", self.atom_button_pressed)
         
         #self.atoms, self.bonds = tst.SF6()
         #self.redraw_all()
+
+    def atom_button_pressed(self, event: tk.Event) -> None:
+        if self.mode == self.Modes.NORMAL:
+            changes: bool = False
+            change_to: Optional[eng.el.Element]
+            change_to = eng.element_by_symbol(self.toolbar.atom_symbol())
+            if change_to is None:
+                return
+            for sel_num in self.selected:
+                if sel_num not in self.graphics:
+                    continue
+                sel_item = self.graphics[sel_num]
+                if isinstance(sel_item, eng.Atom):
+                    err: eng.BondingError = sel_item.can_change_element(change_to)
+                    if err == eng.BondingError.OK:
+                        sel_item.change_element(change_to)
+                        changes = True
+            if changes:
+                self.selected = []
+                self.redraw_all()
     
     def delkey_pressed(self, event: tk.Event) -> None:
         if self.mode == self.Modes.NORMAL and self.selected:

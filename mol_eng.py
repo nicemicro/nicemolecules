@@ -365,26 +365,35 @@ class Atom:
         return bonds_loop
 
 
-def add_atom_by_symbol(symbol: str, coords: Sequence[float]) -> Optional[Atom]:
+def element_by_symbol(symbol: str) -> Optional[el.Element]:
+    """Returns the corresponding element instance to the element symbol."""
     element_dict = {element.symbol: element for element in el.element_table}
-    if not symbol in element_dict:
+    if symbol not in element_dict:
         return None
-    sel_el = element_dict[symbol]
+    return element_dict[symbol]
+
+def add_atom_by_symbol(symbol: str, coords: Sequence[float]) -> Optional[Atom]:
+    """Returns a new atom instance specified by its symbol and coordinates."""
+    sel_el: Optional[el.Element] = element_by_symbol(symbol)
+    if sel_el is None:
+        return None
+    assert isinstance(sel_el, el.Element)
     return Atom(sel_el, coords)
 
-
 def find_molecule(one_atom: Atom) -> tuple:
+    """Finds all CovBond and Atom instances that are somehow connected to the
+    specified Atom instance, and hence form a molecule."""
     atomlist: list[Atom] = [one_atom]
     bondlist: list[CovBond] = []
     current_num: int = 0
     while current_num < len(atomlist):
         current_atom: Atom = atomlist[current_num]
         for bonded_atom in current_atom.bonded_atoms():
-            if not bonded_atom in atomlist:
+            if bonded_atom not in atomlist:
                 atomlist.append(bonded_atom)
             bond_instance: Optional[CovBond]
             bond_instance = current_atom.bond_instance(bonded_atom)
-            if not (bond_instance is None) and (not bond_instance in bondlist):
+            if not (bond_instance is None) and (bond_instance not in bondlist):
                 bondlist.append(bond_instance)
         current_num += 1
     return atomlist, bondlist
