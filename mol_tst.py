@@ -14,8 +14,22 @@ def carbon_monoxide():
     b = eng.Atom(el.Oxygen(), [40, 20])
     print(a)
     print(b)
-    print("bond a to b: ", a.bond(b, 3, 1))
-    print("bond b to a: ", b.bond(a, 3, -1))
+    c = a.bond(b, 3, -1)
+    print(f"bond a to b: {c}")
+    print(c.electrons)
+    print("dativity: ", c.dativity)
+    print("set order to 1")
+    c.order = 1
+    print(c.electrons)
+    print("set dativity to 0")
+    c.dativity = 0
+    print(c.electrons)
+    print("set order to 2")
+    c.order = 2
+    print(c.electrons)
+    print("set dativity to -1")
+    c.dativity = -1
+    print(c.electrons)
     return [a, b], a.bonds
 
 def XH(x = "C"):
@@ -25,7 +39,8 @@ def XH(x = "C"):
     assert isinstance(b, eng.Atom)
     print(a)
     print(b)
-    print("bond a to b: ", a.bond(b))
+    c = a.bond(b)
+    print(f"bond a to b: {c}")
     return [a, b], a.bonds
 
 def SF6(n: int=6, central: str="S", terminal: str="F") -> tuple[list[eng.Atom], list[eng.CovBond]]:
@@ -63,9 +78,9 @@ def description(atoms, to_show = None):
         print(atoms[show_this].bonds[0].dativity)
 
 if __name__ == '__main__':
-    #molecules, bonds = carbon_monoxide()
+    molecules, bonds = carbon_monoxide()
     #molecules, bonds = XH("B")
-    molecules, bonds = SF6(3)
+    #molecules, bonds = SF6(4, "C", "O")
     #molecules, bonds = methane()
     #molecules, bonds = test3()
-    description(molecules, [0])
+    #description(molecules, [0])
