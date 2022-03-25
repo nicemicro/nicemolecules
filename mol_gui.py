@@ -44,12 +44,20 @@ class TopToolbar(ttk.Frame):
         self.mode: int = self.Modes.ADD_ATOM
         self.symbol: str = "C"
         self.bond: list[int] = [1, 0]
+        self.status_text = tk.StringVar()
+        atom_symbols: list[list[str]] = [["H", "C", "N", "O", "F"],
+                                   ["", "", "P", "S"]]
+
         mode_row = ttk.Frame(self, padding="0 0 0 5")
         mode_row.grid(row=0, column=0, columnspan=2, sticky="nsew")
         symbol_sel = ttk.Frame(self, padding="0 0 0 5")
         symbol_sel.grid(row=1, column=0, sticky="nsw")
         bond_sel = ttk.Frame(self, padding="10 0 0 5")
         bond_sel.grid(row=1, column=1, sticky="nse")
+        ttk.Label(self, textvariable=self.status_text).grid(row=0, column=2,
+                rowspan=2, sticky="nesw")
+        self.status_text_update()
+
         ttk.Button(mode_row, text="Add atom",
                 command=lambda: self.set_mode(self.Modes.ADD_ATOM)) \
                 .grid(row=0, column=0, columnspan=1)
@@ -59,14 +67,43 @@ class TopToolbar(ttk.Frame):
         ttk.Button(mode_row, text="Select",
                 command=lambda: self.set_mode(self.Modes.SELECT)) \
                 .grid(row=0, column=2, columnspan=1)
-        ttk.Button(symbol_sel, text="C", command=lambda: self.set_symbol("C")) \
-            .grid(row=0, column=0, columnspan=1)
-        ttk.Button(symbol_sel, text="O", command=lambda: self.set_symbol("O")) \
-            .grid(row=0, column=1, columnspan=1)
+        for row, elements in enumerate(atom_symbols):
+            for index, symbol in enumerate(elements):
+                if symbol == "":
+                    continue
+                ttk.Button(symbol_sel, text=symbol, command=lambda symbol=symbol:
+                        self.set_symbol(symbol)) \
+                    .grid(row=row, column=index, columnspan=1)
         ttk.Button(bond_sel, text="--", command=lambda: self.set_bond([1, None])) \
             .grid(row=0, column=0, columnspan=1)
         ttk.Button(bond_sel, text="==", command=lambda: self.set_bond([2, None])) \
             .grid(row=0, column=1, columnspan=1)
+        ttk.Button(bond_sel, text="≡≡", command=lambda: self.set_bond([3, None])) \
+            .grid(row=0, column=2, columnspan=1)
+        ttk.Button(bond_sel, text="↮", command=lambda: self.set_bond([None, 0])) \
+            .grid(row=1, column=0, columnspan=1)
+        ttk.Button(bond_sel, text="⟶", command=lambda: self.set_bond([None, 1])) \
+            .grid(row=1, column=1, columnspan=1)
+        ttk.Button(bond_sel, text="⟵", command=lambda: self.set_bond([None, -1])) \
+            .grid(row=1, column=2, columnspan=1)
+
+    def status_text_update(self) -> None:
+        text: str = "MODE: "
+        if self.mode == self.Modes.ADD_ATOM:
+            text += "add atom\n"
+        elif self.mode == self.Modes.ADD_BOND:
+            text += "bond atoms\n"
+        elif self.mode == self.Modes.SELECT:
+            text += "select\n"
+        text += f"ATOM SYMBOL: {self.symbol}\n"
+        text += f"BOND ORDER: {self.bond[0]} "
+        if self.bond[1] == 0:
+            text +="--"
+        elif self.bond[1] == -1:
+            text +="⟵"
+        elif self.bond[1] == 1:
+            text +="⟶"
+        self.status_text.set(text)
 
     def is_select(self) -> bool:
         return self.mode == self.Modes.SELECT
@@ -91,17 +128,21 @@ class TopToolbar(ttk.Frame):
         if new_mode == -1:
             new_mode = self.Modes.SELECT
         self.mode = new_mode
+        self.status_text_update()
 
     def set_symbol(self, new_symbol: str) -> None:
         """Sets the default atom symbol for the application"""
         self.event_generate("<<AtomButtonPress>>", when="tail")
         self.symbol = new_symbol
+        self.status_text_update()
 
     def set_bond(self, bondtype: list[Optional[int]]) -> None:
         """Sets the bond type: [order, dativity]"""
         for index, item in enumerate(bondtype):
             if item is not None:
                 self.bond[index] = item
+                self.event_generate(f"<<BondButton{index}Press>>", when="tail")
+        self.status_text_update()
 
 
 class AppContainer(tk.Tk):
@@ -132,15 +173,17 @@ class AppContainer(tk.Tk):
         self.toolbar.grid(row=0, column=0, sticky="nsew")
 
         self.mol_canvas = tk.Canvas(container,
-                                    width=700,
+                                    width=800,
                                     height=600,
                                     bg="white")
         self.mol_canvas.grid(row=1, column=0, sticky="nsew")
         self.mol_canvas.bind("<Button-1>", self.leftclick_canvas)
         self.bind("<Delete>", self.delkey_pressed)
         self.bind("<<AtomButtonPress>>", self.atom_button_pressed)
+        self.bind("<<BondButton0Press>>", self.order_button_pressed)
+        self.bind("<<BondButton1Press>>", self.dativity_button_pressed)
 
-    def atom_button_pressed(self, event: tk.Event) -> None:
+    def atom_button_pressed(self, _event: tk.Event) -> None:
         """Handles the pressing of the atom symbol buttons in the toolbar:
             - in normal mode, if atoms are selected, those are changed to
               the symbol what has been selected on the toolbar."""
@@ -159,6 +202,46 @@ class AppContainer(tk.Tk):
                         change_to)
                     if err == eng.BondingError.OK:
                         sel_item.change_element(change_to)
+                        changes = True
+            if changes:
+                self.selected = []
+                self.redraw_all()
+
+    def order_button_pressed(self, event: tk.Event) -> None:
+        """Handles the pressing of the bond symbol buttons in the toolbar:
+            - in normal mode, if bonds are selected, the order of those bonds
+              is changed with regard to the toolbar setting."""
+        if self.mode == self.Modes.NORMAL:
+            changes: bool = False
+            new_order = self.toolbar.bond_order()
+            for sel_num in self.selected:
+                if sel_num not in self.graphics:
+                    continue
+                sel_item = self.graphics[sel_num]
+                if isinstance(sel_item, eng.CovBond):
+                    err: eng.BondingError = sel_item.can_change_order(new_order)
+                    if err == eng.BondingError.OK:
+                        sel_item.order = new_order
+                        changes = True
+            if changes:
+                self.selected = []
+                self.redraw_all()
+    
+    def dativity_button_pressed(self, event: tk.Event) -> None:
+        """Handles the pressing of the bond symbol buttons in the toolbar:
+            - in normal mode, if bonds are selected, the dativity of those
+              bonds is changed with regard to the toolbar setting."""
+        if self.mode == self.Modes.NORMAL:
+            changes: bool = False
+            new_dativity = self.toolbar.bond_dativity()
+            for sel_num in self.selected:
+                if sel_num not in self.graphics:
+                    continue
+                sel_item = self.graphics[sel_num]
+                if isinstance(sel_item, eng.CovBond):
+                    err: eng.BondingError = sel_item.can_change_dativity(new_dativity)
+                    if err == eng.BondingError.OK:
+                        sel_item.dativity = new_dativity
                         changes = True
             if changes:
                 self.selected = []
@@ -281,7 +364,8 @@ class AppContainer(tk.Tk):
             new_atom = self.add_atom(self.toolbar.atom_symbol(),
                                      [new_x, new_y])
             new_bond = atom_connect.bond(new_atom,
-                                         order=self.toolbar.bond_order())
+                                         order=self.toolbar.bond_order(),
+                                         dative=self.toolbar.bond_dativity())
             self.bonds.append(new_bond)
             self.redraw_all()
             self.set_normal_mode()
@@ -412,6 +496,8 @@ class AppContainer(tk.Tk):
                            atom_to.coord_x,
                            atom_to.coord_y,
                            -1,
+                           self.toolbar.bond_order(),
+                           self.toolbar.bond_dativity(),
                            color="#aaaaaa",
                            tags=("ui_help", f"ui_help-{atom_link_num}"))
 
@@ -439,6 +525,8 @@ class AppContainer(tk.Tk):
                            atom.coord_x + deltax,
                            atom.coord_y + deltay,
                            30,
+                           self.toolbar.bond_order(),
+                           self.toolbar.bond_dativity(),
                            color="#aaaaaa",
                            tags=("ui_help", f"ui_help-{num}"))
             self.mol_canvas.create_text(atom.coord_x + deltax,
