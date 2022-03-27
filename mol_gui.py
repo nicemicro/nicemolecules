@@ -17,14 +17,32 @@ MINDIST = 20
 DEFLEN = 30
 COS30 = DEFLEN * 3 ** (1 / 2) / 2
 XSHIFT = [
-    0, 0, DEFLEN, -DEFLEN,
-    DEFLEN / 2, DEFLEN / 2, -DEFLEN / 2, -DEFLEN / 2,
-    COS30, -COS30, COS30, -COS30
+    0,
+    0,
+    DEFLEN,
+    -DEFLEN,
+    DEFLEN / 2,
+    DEFLEN / 2,
+    -DEFLEN / 2,
+    -DEFLEN / 2,
+    COS30,
+    -COS30,
+    COS30,
+    -COS30,
 ]
 YSHIFT = [
-    DEFLEN, -DEFLEN, 0, 0,
-    COS30, -COS30, COS30, -COS30,
-    DEFLEN / 2, DEFLEN / 2, -DEFLEN / 2, -DEFLEN / 2
+    DEFLEN,
+    -DEFLEN,
+    0,
+    0,
+    COS30,
+    -COS30,
+    COS30,
+    -COS30,
+    DEFLEN / 2,
+    DEFLEN / 2,
+    -DEFLEN / 2,
+    -DEFLEN / 2,
 ]
 
 
@@ -364,7 +382,11 @@ class AppContainer(tk.Tk):
         if self.toolbar.is_add:
             if not len(self.selected) == 0:
                 for sel_item in self.selected:
-                    self.mol_canvas.itemconfigure(sel_item, fill="black")
+                    tags = self.mol_canvas.gettags(sel_item)
+                    if len(tags) >= 2 and "atom" in tags and "empty" in tags:
+                        self.mol_canvas.itemconfigure(sel_item, fill="")
+                    else:
+                        self.mol_canvas.itemconfigure(sel_item, fill="black")
                 self.selected = []
             closestitems: tuple[int, ...] = self.mol_canvas.find_closest(
                 event.x, event.y
@@ -395,7 +417,11 @@ class AppContainer(tk.Tk):
         if self.toolbar.is_select:
             if not len(self.selected) == 0:
                 for sel_item in self.selected:
-                    self.mol_canvas.itemconfigure(sel_item, fill="black")
+                    tags = self.mol_canvas.gettags(sel_item)
+                    if len(tags) >= 2 and "atom" in tags and "empty" in tags:
+                        self.mol_canvas.itemconfigure(sel_item, fill="")
+                    else:
+                        self.mol_canvas.itemconfigure(sel_item, fill="black")
             self.selected = [sel_atom_num]
             self.mol_canvas.itemconfigure(sel_atom_num, fill="green")
             self.event_listened = True
@@ -447,6 +473,7 @@ class AppContainer(tk.Tk):
             closestitems = self.mol_canvas.find_closest(event.x, event.y)
             self.mol_canvas.itemconfigure("ui_help", fill="#aaaaaa")
             self.mol_canvas.itemconfigure("atom", fill="black")
+            self.mol_canvas.itemconfigure("empty", fill="")
             item, tags = self.close_selection(closestitems)
             if item is None or tags is None:
                 self.set_normal_mode()
@@ -489,6 +516,7 @@ class AppContainer(tk.Tk):
             closestitems = self.mol_canvas.find_closest(event.x, event.y)
             self.mol_canvas.itemconfigure("ui_help", fill="#aaaaaa")
             self.mol_canvas.itemconfigure("atom", fill="black")
+            self.mol_canvas.itemconfigure("empty", fill="")
             item, tags = self.close_selection(closestitems)
             if item is None or tags is None:
                 return
@@ -533,7 +561,11 @@ class AppContainer(tk.Tk):
             bond_id: int = int(tags[1].split("-")[1])
             if not len(self.selected) == 0:
                 for sel_item in self.selected:
-                    self.mol_canvas.itemconfigure(sel_item, fill="black")
+                    tags = self.mol_canvas.gettags(sel_item)
+                    if len(tags) >= 2 and "atom" in tags and "empty" in tags:
+                        self.mol_canvas.itemconfigure(sel_item, fill="")
+                    else:
+                        self.mol_canvas.itemconfigure(sel_item, fill="black")
             self.selected = list(self.mol_canvas.find_withtag(f"bond-{bond_id}"))
             self.mol_canvas.itemconfigure(f"bond-{bond_id}", fill="green")
             self.event_listened = True
@@ -574,6 +606,8 @@ class AppContainer(tk.Tk):
                 != eng.BondingError.OK
             ):
                 continue
+            cut_bond: tuple[bool, bool]
+            cut_bond = (not self.hide_atom(atom_from), not self.hide_atom(atom_to))
             self.draw_bond(
                 (
                     atom_from.coord_x,
@@ -584,6 +618,7 @@ class AppContainer(tk.Tk):
                 -1,
                 self.toolbar.bond_order,
                 self.toolbar.bond_dativity,
+                cut=cut_bond,
                 color="#aaaaaa",
                 tags=("ui_help", f"ui_help-{atom_link_num}"),
             )
@@ -609,6 +644,11 @@ class AppContainer(tk.Tk):
             if over_atom:
                 num += 1
                 continue
+            cut_bond: tuple[bool, bool]
+            if self.hide_atom(atom):
+                cut_bond = (False, True)
+            else:
+                cut_bond = (True, True)
             self.draw_bond(
                 (
                     atom.coord_x,
@@ -619,6 +659,7 @@ class AppContainer(tk.Tk):
                 30,
                 self.toolbar.bond_order,
                 self.toolbar.bond_dativity,
+                cut=cut_bond,
                 color="#aaaaaa",
                 tags=("ui_help", f"ui_help-{num}"),
             )
@@ -708,6 +749,7 @@ class AppContainer(tk.Tk):
         return bond_objects
 
     def hide_atom(self, atom: eng.Atom) -> bool:
+        """Determines if an atom should be hidden (and symbol not shown on the formula)"""
         if atom.symbol == "C" and self.toolbar.hide_carbon and len(atom.bonds) > 0:
             linked_atoms_sym = [bond.other_atoms(atom)[0].symbol for bond in atom.bonds]
             if "C" in linked_atoms_sym:
@@ -742,15 +784,24 @@ class AppContainer(tk.Tk):
                 self.graphics[bondid] = bond
             bond_id += 1
         for atom in self.atoms:
+            atom_s: int
             if self.hide_atom(atom):
-                continue
-            atom_s: int = self.mol_canvas.create_text(
-                atom.coord_x,
-                atom.coord_y,
-                text=atom.symbol,
-                justify="center",
-                tags=("atom"),
-            )
+                atom_s = self.mol_canvas.create_rectangle(
+                    atom.coord_x - MINDIST / 3,
+                    atom.coord_y - MINDIST / 3,
+                    atom.coord_x + MINDIST / 3,
+                    atom.coord_y + MINDIST / 3,
+                    width=0,
+                    tags=("atom", "empty"),
+                )
+            else:
+                atom_s = self.mol_canvas.create_text(
+                    atom.coord_x,
+                    atom.coord_y,
+                    text=atom.symbol,
+                    justify="center",
+                    tags=("atom"),
+                )
             self.graphics[atom_s] = atom
             self.mol_canvas.tag_bind(
                 atom_s,
