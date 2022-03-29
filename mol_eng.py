@@ -249,7 +249,7 @@ class Atom:
         return nonbonding
 
     def get_empty_valence(self) -> int:
-        return self.fullshell - self.get_electrons()
+        return int(self.fullshell - self.get_electrons())
 
     def get_radicals(self) -> int:
         radicals: int = min(self.get_empty_valence(), self.get_nonbonding_el())

@@ -64,7 +64,7 @@ class TopToolbar(ttk.Frame):
         HYDROGENS = auto()
         ELECTRONS = auto()
 
-    empty_val_names: list[str]
+    empty_val_names: dict[int, str]
 
     def get_is_select(self) -> bool:
         return self._mode == self.Modes.SELECT
@@ -85,7 +85,10 @@ class TopToolbar(ttk.Frame):
         return self._bond[1]
 
     def get_empty_val_style(self) -> int:
-        return self.empty_val_names.index(self._emptyvalence.get())
+        index: int = list(
+                self.empty_val_names.values()).index(
+                    self._emptyvalence.get())
+        return list(self.empty_val_names.keys())[index]
 
     def get_hide_carbon(self) -> bool:
         return self._hide_carbon.get() == 1
@@ -110,8 +113,14 @@ class TopToolbar(ttk.Frame):
         self._symbol: str = "C"
         self._bond: list[int] = [1, 0]
         self.status_text = tk.StringVar()
-        atom_symbols: list[list[str]] = [["H", "C", "N", "O", "F"], ["", "", "P", "S"]]
-        self.empty_val_names = ["Nothing", "Hydrogens", "Electrons"]
+        atom_symbols: list[list[str]] = [
+                ["H", "C", "N", "O", "F"],
+                ["", "", "P", "S"]]
+        self.empty_val_names = {
+                self.EmptyValence.NOTHING: "Nothing",
+                self.EmptyValence.HYDROGENS: "Hydrogens",
+                self.EmptyValence.ELECTRONS: "Electrons"
+        }
 
         mode_row = ttk.Frame(self, padding="0 0 0 5")
         mode_row.grid(row=0, column=0, sticky="nsew")
@@ -151,15 +160,15 @@ class TopToolbar(ttk.Frame):
             command=self.draw_mode_change,
         ).grid(row=0, column=1)
         self._emptyvalence = tk.StringVar()
-        self._emptyvalence.set(self.empty_val_names[0])
+        self._emptyvalence.set(self.empty_val_names[self.EmptyValence.NOTHING])
         ttk.Label(mol_style, text="Atoms with not full valence shells:").grid(
             row=0, column=2
         )
         ttk.OptionMenu(
             mol_style,
             self._emptyvalence,
-            self.empty_val_names[0],
-            *self.empty_val_names,
+            self.empty_val_names[self.EmptyValence.NOTHING],
+            *self.empty_val_names.values(),
             command=self.draw_mode_change,
         ).grid(row=0, column=3)
 
@@ -795,13 +804,35 @@ class AppContainer(tk.Tk):
                     tags=("atom", "empty"),
                 )
             else:
+                textrep: str = atom.symbol
+                if (
+                    self.toolbar.empty_val_style ==
+                    self.toolbar.EmptyValence.HYDROGENS
+                    and atom.empty_valence > 0
+                ):
+                    textrep += "H"
                 atom_s = self.mol_canvas.create_text(
                     atom.coord_x,
                     atom.coord_y,
-                    text=atom.symbol,
+                    text=textrep,
                     justify="center",
                     tags=("atom"),
-                )
+                    )
+                if (
+                    self.toolbar.empty_val_style ==
+                    self.toolbar.EmptyValence.HYDROGENS
+                    and atom.empty_valence > 1
+                ):
+                    (_, bby1, bbx2, bby2) = self.mol_canvas.bbox(atom_s)
+                    h_num_ind = self.mol_canvas.create_text(
+                        bbx2 + 2,
+                        (bby1 + bby2 * 3) / 4,
+                        text=f"{atom.empty_valence}",
+                        justify="left",
+                        font=("", 8)
+                        )
+                    self.graphics[h_num_ind] = atom
+            self.mol_canvas.addtag_withtag("atom-{atom_s}", atom_s)
             self.graphics[atom_s] = atom
             self.mol_canvas.tag_bind(
                 atom_s,
