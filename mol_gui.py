@@ -9,9 +9,10 @@ import mol_eng as eng
 import mol_tst as tst
 import tkinter as tk
 from tkinter import ttk
+from tkinter import font as tkfont
 from math import sqrt
 from enum import IntEnum, auto
-from typing import Optional, Sequence, Union, Any
+from typing import Optional, Sequence, Union, Any, Literal
 
 MINDIST = 20
 DEFLEN = 30
@@ -228,6 +229,7 @@ class TopToolbar(ttk.Frame):
             new_mode = self.Modes.SELECT
         self._mode = new_mode
         self.status_text_update()
+        self.event_generate("<<ModeButtonPress>>", when="tail")
 
     def set_symbol(self, new_symbol: str) -> None:
         """Sets the default atom symbol for the application"""
@@ -264,6 +266,23 @@ class AppContainer(tk.Tk):
         self.mode = self.Modes.NORMAL
         self.title("Nice Molecules")
 
+        self.symbol_font: tkfont.Font = tkfont.nametofont("TkDefaultFont")
+        self.symbol_index_font = tkfont.Font(
+            font=self.symbol_font.copy(),
+            name="symbol_index_font"
+        )
+        self.symbol_index_font.configure(size=8)
+        self.symbol_font_sel = tkfont.Font(
+            font=self.symbol_font.copy(),
+            name="symbol_font_sel"
+        )
+        self.symbol_font_sel.configure(weight="bold")
+        self.symbol_index_font_sel = tkfont.Font(
+            font=self.symbol_index_font.copy(),
+            name="symbol_index_font_sel"
+        )
+        self.symbol_index_font_sel.configure(weight="bold")
+
         container = ttk.Frame(self)
         container.grid(row=0, column=0, sticky="nsew")
         self.columnconfigure(0, weight=1)
@@ -277,11 +296,16 @@ class AppContainer(tk.Tk):
         self.mol_canvas.bind("<Button-1>", self.leftclick_canvas)
         self.bind("<Delete>", self.delkey_pressed)
         self.bind("<<RedrawAll>>", lambda x: self.redraw_all())
-        self.bind("<<AtomButtonPress>>", self.atom_button_pressed)
-        self.bind("<<BondButton0Press>>", self.order_button_pressed)
-        self.bind("<<BondButton1Press>>", self.dativity_button_pressed)
+        self.bind("<<ModeButtonPress>>", self.button_pressed_mode)
+        self.bind("<<AtomButtonPress>>", self.button_pressed_atom)
+        self.bind("<<BondButton0Press>>", self.button_pressed_order)
+        self.bind("<<BondButton1Press>>", self.button_pressed_dativity)
+    
+    def button_pressed_mode(self, _event: tk.Event) -> None:
+        if not self.toolbar.is_select:
+            self.select_nothing()
 
-    def atom_button_pressed(self, _event: tk.Event) -> None:
+    def button_pressed_atom(self, _event: tk.Event) -> None:
         """Handles the pressing of the atom symbol buttons in the toolbar:
         - in normal mode, if atoms are selected, those are changed to
           the symbol what has been selected on the toolbar."""
@@ -304,7 +328,7 @@ class AppContainer(tk.Tk):
                 self.selected = []
                 self.redraw_all()
 
-    def order_button_pressed(self, event: tk.Event) -> None:
+    def button_pressed_order(self, event: tk.Event) -> None:
         """Handles the pressing of the bond symbol buttons in the toolbar:
         - in normal mode, if bonds are selected, the order of those bonds
           is changed with regard to the toolbar setting."""
@@ -324,7 +348,7 @@ class AppContainer(tk.Tk):
                 self.selected = []
                 self.redraw_all()
 
-    def dativity_button_pressed(self, event: tk.Event) -> None:
+    def button_pressed_dativity(self, event: tk.Event) -> None:
         """Handles the pressing of the bond symbol buttons in the toolbar:
         - in normal mode, if bonds are selected, the dativity of those
           bonds is changed with regard to the toolbar setting."""
@@ -387,16 +411,9 @@ class AppContainer(tk.Tk):
             self.event_listened = False
             return
         if self.toolbar.is_select:
+            self.select_nothing()
             return
         if self.toolbar.is_add:
-            if not len(self.selected) == 0:
-                for sel_item in self.selected:
-                    tags = self.mol_canvas.gettags(sel_item)
-                    if len(tags) >= 2 and "atom" in tags and "empty" in tags:
-                        self.mol_canvas.itemconfigure(sel_item, fill="")
-                    else:
-                        self.mol_canvas.itemconfigure(sel_item, fill="black")
-                self.selected = []
             closestitems: tuple[int, ...] = self.mol_canvas.find_closest(
                 event.x, event.y
             )
@@ -415,24 +432,22 @@ class AppContainer(tk.Tk):
             coords: list[int] = [event.x, event.y]
             self.add_atom(self.toolbar.atom_symbol, coords)
 
-    def leftdown_atom(self, sel_atom_num: int, _event: tk.Event) -> None:
+    def leftdown_atom(self, atom_id: int, _event: tk.Event) -> None:
         """Handles the event of mouse button press on atom, based on the
         operation:
         - if selection, current atom is selected,
         - if add atom, enters mode to add linked atom,
         - if connect atoms, enters mode to connect existing atoms."""
-        sel_atom = self.graphics[sel_atom_num]
-        assert isinstance(sel_atom, eng.Atom), "The selection should have been an atom"
+        sel_atom = self.atoms[atom_id]
         if self.toolbar.is_select:
-            if not len(self.selected) == 0:
-                for sel_item in self.selected:
-                    tags = self.mol_canvas.gettags(sel_item)
-                    if len(tags) >= 2 and "atom" in tags and "empty" in tags:
-                        self.mol_canvas.itemconfigure(sel_item, fill="")
-                    else:
-                        self.mol_canvas.itemconfigure(sel_item, fill="black")
-            self.selected = [sel_atom_num]
-            self.mol_canvas.itemconfigure(sel_atom_num, fill="green")
+            self.select_nothing()
+            self.selected = list(self.mol_canvas.find_withtag(f"atom-{atom_id}"))
+            self.selected += list(self.mol_canvas.find_withtag(f"atom_text-{atom_id}"))
+            self.mol_canvas.itemconfigure(f"atom-{atom_id}", fill="green")
+            self.mol_canvas.itemconfigure(f"atom_text-{atom_id}", fill="green")
+            for sel_element in self.selected:
+                if "atom_text" in self.mol_canvas.gettags(sel_element):
+                    self.change_font_weight(sel_element, "bold")
             self.event_listened = True
             return
         if self.toolbar.is_add:
@@ -453,7 +468,7 @@ class AppContainer(tk.Tk):
             self.possible_links(sel_atom)
             self.mode = self.Modes.LINK_ATOMS
 
-    def mouseup_atom(self, atom_s: int, event: tk.Event) -> None:
+    def mouseup_atom(self, atom_id: int, event: tk.Event) -> None:
         """Handles the events when the mouse is lifted after draging an atom:
         - adding linked atom: adds new atom and new bond,
         - linking atoms: adds new bond."""
@@ -467,8 +482,7 @@ class AppContainer(tk.Tk):
             atomplace = "atom_here-" + tags[1].split("-")[-1]
             new_x = int(self.mol_canvas.coords(atomplace)[0])
             new_y = int(self.mol_canvas.coords(atomplace)[1])
-            atom_connect = self.graphics[atom_s]
-            assert isinstance(atom_connect, eng.Atom)
+            atom_connect = self.atoms[atom_id]
             new_atom = self.add_atom(self.toolbar.atom_symbol, [new_x, new_y])
             new_bond = atom_connect.bond(
                 new_atom,
@@ -495,9 +509,8 @@ class AppContainer(tk.Tk):
             if selected_atom == -1:
                 self.set_normal_mode()
                 return
-            atom_from = self.graphics[atom_s]
+            atom_from = self.atoms[atom_id]
             atom_to = self.graphics[selected_atom]
-            assert isinstance(atom_from, eng.Atom), "Trying to bobd to a non-atom"
             assert isinstance(atom_to, eng.Atom), "Trying to bobd to a non-atom"
             if (
                 atom_from.can_bond(
@@ -517,7 +530,7 @@ class AppContainer(tk.Tk):
             self.redraw_all()
             self.set_normal_mode()
 
-    def drag_atom(self, atom_s: int, event: tk.Event) -> None:
+    def drag_atom(self, atom_id: int, event: tk.Event) -> None:
         """Handling the dragging of an atom that was clicked on:
         - adding linked atom / linking atoms: highlights the
           placeholder where new atom / bond will be created."""
@@ -541,9 +554,8 @@ class AppContainer(tk.Tk):
                     selected_atom = item
                 if selected_atom == -1:
                     return
-                atom_from = self.graphics[atom_s]
+                atom_from = self.atoms[atom_id]
                 atom_to = self.graphics[selected_atom]
-                assert isinstance(atom_from, eng.Atom)
                 assert isinstance(atom_to, eng.Atom)
                 if (
                     atom_from.can_bond(
@@ -555,30 +567,46 @@ class AppContainer(tk.Tk):
                 self.mol_canvas.itemconfigure(f"ui_help-{selected_atom}", fill="blue")
                 self.mol_canvas.itemconfigure(selected_atom, fill="blue")
 
-    def click_bond(self, bond_line_id: int, _event: tk.Event) -> None:
+    def click_bond(self, bond_id: int, _event: tk.Event) -> None:
         """Handling the event of a bond being clicked on:
         - if operation is selection, selects the bond, and all lines
           that constitute the bond."""
-        sel_bond = self.graphics[bond_line_id]
-        assert isinstance(
-            sel_bond, eng.CovBond
-        ), "The selection should have been an atom"
         if self.toolbar.is_select:
-            tags: Sequence[str] = self.mol_canvas.gettags(bond_line_id)
-            if len(tags) < 0 or tags[0] != "bond":
-                return
-            bond_id: int = int(tags[1].split("-")[1])
-            if not len(self.selected) == 0:
-                for sel_item in self.selected:
-                    tags = self.mol_canvas.gettags(sel_item)
-                    if len(tags) >= 2 and "atom" in tags and "empty" in tags:
-                        self.mol_canvas.itemconfigure(sel_item, fill="")
-                    else:
-                        self.mol_canvas.itemconfigure(sel_item, fill="black")
+            self.select_nothing()
             self.selected = list(self.mol_canvas.find_withtag(f"bond-{bond_id}"))
-            self.mol_canvas.itemconfigure(f"bond-{bond_id}", fill="green")
+            self.mol_canvas.itemconfigure(f"bond-{bond_id}", fill="green", width=2)
             self.event_listened = True
             return
+
+    def change_font_weight(self, item_num: int, new_weight: Literal["bold", "normal"]) -> None:
+        assert "atom_text" in self.mol_canvas.gettags(item_num), \
+            "Only text items have fonts."
+        if "index" in self.mol_canvas.gettags(item_num):
+            if new_weight == "bold":
+                self.mol_canvas.itemconfigure(item_num, font=self.symbol_index_font_sel)
+                return
+            self.mol_canvas.itemconfigure(item_num, font=self.symbol_index_font)
+            return
+        if new_weight == "bold":
+            self.mol_canvas.itemconfigure(item_num, font=self.symbol_font_sel)
+            return
+        self.mol_canvas.itemconfigure(item_num, font=self.symbol_font)
+        return
+
+    def select_nothing(self) -> None:
+        """Clears the selection and changes the previously selected objects
+        back to their default look."""
+        for sel_item in self.selected:
+            tags: Sequence[str] = self.mol_canvas.gettags(sel_item)
+            if "empty" in tags:
+                self.mol_canvas.itemconfigure(sel_item, fill="")
+            else:
+                self.mol_canvas.itemconfigure(sel_item, fill="black")
+            if "atom_text" in tags:
+                self.change_font_weight(sel_item, "normal")
+            if "bond" in tags:
+                self.mol_canvas.itemconfigure(sel_item, width=1)
+        self.selected = []
 
     def close_selection(
         self, closestitems: tuple[int, ...]
@@ -646,7 +674,7 @@ class AppContainer(tk.Tk):
             over = self.mol_canvas.find_overlapping(x1, y1, x2, y2)
             over_atom = False
             for obj in over:
-                tags = self.mol_canvas.gettags(obj)
+                tags: Sequence[str] = self.mol_canvas.gettags(obj)
                 if len(tags) > 0 and ("atom" in tags or "bond" in tags):
                     over_atom = True
                     break
@@ -747,13 +775,6 @@ class AppContainer(tk.Tk):
                 fill=color,
                 tags=tags,
             )
-            self.mol_canvas.tag_bind(
-                bond_line_id,
-                "<Button-1>",
-                lambda event, bond_id=bond_line_id: self.click_bond(
-                    bond_line_id, event
-                ),
-            )
             bond_objects.append(bond_line_id)
         return bond_objects
 
@@ -768,9 +789,11 @@ class AppContainer(tk.Tk):
     def redraw_all(self) -> None:
         """Redraws all atoms and bonds on a freshly cleared canvas."""
         self.mol_canvas.delete("all")
+        selected_objects: list[Union[eng.Atom, eng.CovBond]]
+        selected_objects = [self.graphics[item] for item in self.selected]
+        self.selected = []
         self.graphics = {}
-        bond_id: int = 0
-        for bond in self.bonds:
+        for bond_id, bond in enumerate(self.bonds):
             x1, y1, x2, y2 = bond.coords
             bondlen = bond.length
             if bondlen == 0:
@@ -781,7 +804,7 @@ class AppContainer(tk.Tk):
                 not self.hide_atom(bond.atoms[0]),
                 not self.hide_atom(bond.atoms[1]),
             )
-            bond_drawings = self.draw_bond(
+            bond_drawings: list[int] = self.draw_bond(
                 (x1, y1, x2, y2),
                 bondlen,
                 bond_order,
@@ -791,18 +814,26 @@ class AppContainer(tk.Tk):
             )
             for bondid in bond_drawings:
                 self.graphics[bondid] = bond
-            bond_id += 1
-        for atom in self.atoms:
-            atom_s: int
+            if bond in selected_objects:
+                self.selected += bond_drawings
+            self.mol_canvas.tag_bind(
+                f"bond-{bond_id}",
+                "<Button-1>",
+                lambda event, bond_id=bond_id: self.click_bond(
+                    bond_id, event
+                ),
+            )
+        for atom_id, atom in enumerate(self.atoms):
+            atom_s: list[int] = []
             if self.hide_atom(atom):
-                atom_s = self.mol_canvas.create_rectangle(
+                atom_s.append(self.mol_canvas.create_rectangle(
                     atom.coord_x - MINDIST / 3,
                     atom.coord_y - MINDIST / 3,
                     atom.coord_x + MINDIST / 3,
                     atom.coord_y + MINDIST / 3,
                     width=0,
-                    tags=("atom", "empty"),
-                )
+                    tags=("atom", f"atom-{atom_id}", "empty"),
+                ))
             else:
                 textrep: str = atom.symbol
                 if (
@@ -811,44 +842,56 @@ class AppContainer(tk.Tk):
                     and atom.empty_valence > 0
                 ):
                     textrep += "H"
-                atom_s = self.mol_canvas.create_text(
+                atom_s.append(self.mol_canvas.create_text(
                     atom.coord_x,
                     atom.coord_y,
                     text=textrep,
                     justify="center",
-                    tags=("atom"),
-                    )
+                    font=self.symbol_font,
+                    tags=("atom", f"atom-{atom_id}", "atom_text", f"atom_text-{atom_id}"),
+                    ))
                 if (
                     self.toolbar.empty_val_style ==
                     self.toolbar.EmptyValence.HYDROGENS
                     and atom.empty_valence > 1
                 ):
-                    (_, bby1, bbx2, bby2) = self.mol_canvas.bbox(atom_s)
-                    h_num_ind = self.mol_canvas.create_text(
+                    (_, bby1, bbx2, bby2) = self.mol_canvas.bbox(atom_s[0])
+                    atom_s.append(self.mol_canvas.create_text(
                         bbx2 + 2,
                         (bby1 + bby2 * 3) / 4,
                         text=f"{atom.empty_valence}",
                         justify="left",
-                        font=("", 8)
-                        )
-                    self.graphics[h_num_ind] = atom
-            self.mol_canvas.addtag_withtag("atom-{atom_s}", atom_s)
-            self.graphics[atom_s] = atom
+                        font=self.symbol_index_font,
+                        tags=("atom_text", f"atom_text-{atom_id}", "index")
+                        ))
+            for atom_graph_ind in atom_s:
+                self.graphics[atom_graph_ind] = atom
+            if atom in selected_objects:
+                self.selected += atom_s
             self.mol_canvas.tag_bind(
-                atom_s,
+                f"atom-{atom_id}",
                 "<ButtonPress-1>",
-                lambda event, atom_s=atom_s: self.leftdown_atom(atom_s, event),
+                lambda event, atom_id=atom_id: self.leftdown_atom(atom_id, event),
             )
             self.mol_canvas.tag_bind(
-                atom_s,
+                f"atom-{atom_id}",
                 "<ButtonRelease-1>",
-                lambda event, atom_s=atom_s: self.mouseup_atom(atom_s, event),
+                lambda event, atom_id=atom_id: self.mouseup_atom(atom_id, event),
             )
             self.mol_canvas.tag_bind(
-                atom_s,
+                f"atom-{atom_id}",
                 "<B1-Motion>",
-                lambda event, atom_s=atom_s: self.drag_atom(atom_s, event),
+                lambda event, atom_id=atom_id: self.drag_atom(atom_id, event),
             )
+        for item_num in self.selected:
+            tags: Sequence[str] = self.mol_canvas.gettags(item_num)
+            self.mol_canvas.itemconfigure(item_num, fill="green")
+            gui_element = self.graphics[item_num]
+            if isinstance(gui_element, eng.CovBond):
+                self.mol_canvas.itemconfigure(item_num, width=2)
+            if isinstance(gui_element, eng.Atom):
+                if "atom_text" in tags:
+                    self.change_font_weight(item_num, "bold")
 
 
 def main() -> None:
