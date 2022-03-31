@@ -5,7 +5,7 @@ Created on Mon Feb 21 15:52:19 2022
 @author: nicemicro
 """
 
-from math import sqrt
+from math import sqrt, atan2, pi
 from typing import Optional, Sequence
 from enum import IntEnum, auto
 import elements as el
@@ -120,11 +120,11 @@ class CovBond:
     def __repr__(self) -> str:
         return super().__repr__() + "\n" + self.describe()
 
-    def electrons_calc(self, order: int = 1, dative: int = 0) -> Optional[list[int]]:
+    def electrons_calc(self, order: float = 1, dative: float = 0) -> Optional[list[int]]:
         """Converts order and dativity values to electron configuration"""
         if order < 1:
             return None
-        return [order + dative, order - dative]
+        return [int(order + dative), int(order - dative)]
 
     def can_change_dativity(self, new_dativity: int) -> BondingError:
         """Checks whether the suggested dativity can be changed to for this
@@ -253,12 +253,74 @@ class Atom:
 
     def get_radicals(self) -> int:
         radicals: int = min(self.get_empty_valence(), self.get_nonbonding_el())
-        radicals = radicals % 2
+        if radicals < 0:
+            radicals = radicals % 2
         return radicals
 
     def get_lone_pairs(self) -> int:
         nonbonding: int = self.get_nonbonding_el() - self.get_radicals()
-        return nonbonding // 2
+        return int(nonbonding // 2)
+
+    def get_bond_angles(self) -> list[float]:
+        """Returns the list of the angles of bonds relative to the x axis."""
+        angle_list: list[float] = []
+        for bond in self._bonds:
+            xdiff: float = bond.other_atoms(self)[0].coord_x - self.coord_x
+            ydiff: float = bond.other_atoms(self)[0].coord_y - self.coord_y
+            angle: float = atan2(ydiff, xdiff)
+            if angle < 0:
+                angle = 2 * pi + angle
+            angle_list.append(angle)
+        return angle_list
+
+    def get_electron_angles(self) -> list[float]:
+        """Returns the list of the suggested angles of radicals and lone pairs."""
+        angles: list[float] = self.get_bond_angles()
+        angles.sort()
+        el_num: int = self.get_lone_pairs() + self.get_radicals()
+        el_angles: list[float] = []
+        rel_ang: list[float] = relative_angles(angles)
+        angle: float
+        diff: float
+        start: float
+        repeat: int
+        while el_num > 0:
+            if len(angles) <= 1:
+                diff = 2 * pi / (el_num + len(angles))
+                start = 0
+                repeat = el_num
+                if len(angles) == 1:
+                    start = angles[0] + diff
+            elif len(angles) == 2 and pi - 0.1 < rel_ang[0] < pi + 0.1:
+                diff = pi
+                start = angles[0] + pi/2
+                repeat = 1
+            else:
+                largest: float = max(rel_ang)
+                largest_loc: int = rel_ang.index(largest)
+                start = angles[largest_loc]
+                if largest_loc == len(rel_ang)-1:
+                    diff = angles[0] + 2 * pi - start
+                else:
+                    diff = angles[largest_loc+1] - start
+                if largest > pi - 0.1:
+                    diff = diff / (el_num + 1)
+                    repeat = el_num
+                else:
+                    diff = diff / (3 - el_num % 2)
+                    repeat = 2 - el_num % 2
+                start += diff
+            for index in range(repeat):
+                angle = start + index * diff
+                while angle > 2 * pi:
+                    angle -= 2 * pi
+                el_angles.append(angle)
+                angles.append(angle)
+                el_num -= 1
+            el_angles.sort()
+            angles.sort()
+            rel_ang = relative_angles(angles)
+        return el_angles
 
     def toss(self, new_value):
         """Throws an error if unmodifiable things are trying to get
@@ -282,6 +344,8 @@ class Atom:
     empty_valence = property(get_empty_valence, toss)
     radicals = property(get_radicals, toss)
     lone_pairs = property(get_lone_pairs, toss)
+    bond_angles = property(get_bond_angles, toss)
+    electron_angles = property(get_electron_angles, toss)
 
     def __init__(self, element: el.Element, coords: Sequence[float], charge: int = 0):
         self._element = element
@@ -461,6 +525,14 @@ def add_atom_by_symbol(symbol: str, coords: Sequence[float]) -> Optional[Atom]:
         return None
     assert isinstance(sel_el, el.Element)
     return Atom(sel_el, coords)
+
+
+def relative_angles(angle_list: list[float]) -> list[float]:
+    relative_angl: list[float] = []
+    if len(angle_list) > 0:
+        for a, b in zip(angle_list, angle_list[1:]+[angle_list[0]+2*pi]):
+            relative_angl.append(b-a)
+    return relative_angl
 
 
 def find_molecule(one_atom: Atom) -> tuple:

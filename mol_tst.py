@@ -44,8 +44,8 @@ def XH(x = "C"):
     return [a, b], a.bonds
 
 def SF6(n: int=6, central: str="S", terminal: str="F") -> tuple[list[eng.Atom], list[eng.CovBond]]:
-    loc_x = [60, 100, 40, 120, 60, 100]
-    loc_y = [50, 50, 80, 80, 110, 110]
+    loc_x = [60, 100, 120, 60, 100, 40]
+    loc_y = [50, 50, 80, 110, 110, 80]
     molecules: list[eng.Atom] = []
     new_atom = eng.add_atom_by_symbol(central, [80, 80])
     assert isinstance(new_atom, eng.Atom)
@@ -55,18 +55,22 @@ def SF6(n: int=6, central: str="S", terminal: str="F") -> tuple[list[eng.Atom], 
         assert isinstance(new_atom, eng.Atom)
         molecules.append(new_atom)
         molecules[-1].bond(molecules[0])
+    print(f"Bond angles: {molecules[0].bond_angles}")
+    print(f"Electron angles: {molecules[0].electron_angles}")
     return molecules, molecules[0].bonds
 
 def methane():
     a = eng.Atom(el.Carbon(), [40, 40])
     b = eng.Atom(el.Hydrogen(), [20, 40])
-    c = eng.Atom(el.Hydrogen(), [40, 40])
-    d = eng.Atom(el.Hydrogen(), [20, 40])
-    e = eng.Atom(el.Hydrogen(), [20, 40])
+    c = eng.Atom(el.Hydrogen(), [60, 40])
+    d = eng.Atom(el.Hydrogen(), [40, 20])
+    e = eng.Atom(el.Hydrogen(), [40, 60])
     a.bond(b)
     a.bond(c)
     a.bond(d)
     a.bond(e)
+    print(f"Bond angles: {a.bond_angles}")
+    print(f"Electron angles: {a.electron_angles}")
     return [a, b, c, d, e], a.bonds
 
 def description(atoms, to_show = None):
@@ -78,9 +82,9 @@ def description(atoms, to_show = None):
         print(atoms[show_this].bonds[0].dativity)
 
 if __name__ == '__main__':
-    molecules, bonds = carbon_monoxide()
+    #molecules, bonds = carbon_monoxide()
     #molecules, bonds = XH("B")
-    #molecules, bonds = SF6(4, "C", "O")
+    molecules, bonds = SF6(4, "Xe", "F")
     #molecules, bonds = methane()
     #molecules, bonds = test3()
     #description(molecules, [0])

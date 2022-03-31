@@ -94,6 +94,24 @@ class Sulphur(Element):
     _hypervalent = True
 
 
+class Chlorine(Element):
+    _symbol = "Cl"
+    _valence_el = 7
+    _hypervalent = True
+
+
+class Iodine(Element):
+    _symbol = "I"
+    _valence_el = 7
+    _hypervalent = True
+
+
+class Xenon(Element):
+    _symbol = "Xe"
+    _valence_el = 8
+    _hypervalent = True
+
+
 element_table: list[Element] = []
 element_table.append(Hydrogen())
 element_table.append(Boron())
@@ -104,3 +122,6 @@ element_table.append(Fluorine())
 element_table.append(Silicon())
 element_table.append(Phosphorus())
 element_table.append(Sulphur())
+element_table.append(Chlorine())
+element_table.append(Iodine())
+element_table.append(Xenon())
