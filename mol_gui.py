@@ -10,7 +10,7 @@ import mol_tst as tst
 import tkinter as tk
 from tkinter import ttk
 from tkinter import font as tkfont
-from math import sqrt
+from math import sqrt, cos, sin, pi
 from enum import IntEnum, auto
 from typing import Optional, Sequence, Union, Any, Literal
 
@@ -86,9 +86,7 @@ class TopToolbar(ttk.Frame):
         return self._bond[1]
 
     def get_empty_val_style(self) -> int:
-        index: int = list(
-                self.empty_val_names.values()).index(
-                    self._emptyvalence.get())
+        index: int = list(self.empty_val_names.values()).index(self._emptyvalence.get())
         return list(self.empty_val_names.keys())[index]
 
     def get_hide_carbon(self) -> bool:
@@ -115,12 +113,14 @@ class TopToolbar(ttk.Frame):
         self._bond: list[int] = [1, 0]
         self.status_text = tk.StringVar()
         atom_symbols: list[list[str]] = [
-                ["H", "C", "N", "O", "F"],
-                ["", "", "P", "S"]]
+            ["H", "C", "N", "O", "F", ""],
+            ["", "", "P", "S", "Cl"],
+            ["", "", "", "", "I", "Xe"],
+        ]
         self.empty_val_names = {
-                self.EmptyValence.NOTHING: "Nothing",
-                self.EmptyValence.HYDROGENS: "Hydrogens",
-                self.EmptyValence.ELECTRONS: "Electrons"
+            self.EmptyValence.NOTHING: "Nothing",
+            self.EmptyValence.HYDROGENS: "Hydrogens",
+            self.EmptyValence.ELECTRONS: "Electrons",
         }
 
         mode_row = ttk.Frame(self, padding="0 0 0 5")
@@ -268,18 +268,15 @@ class AppContainer(tk.Tk):
 
         self.symbol_font: tkfont.Font = tkfont.nametofont("TkDefaultFont")
         self.symbol_index_font = tkfont.Font(
-            font=self.symbol_font.copy(),
-            name="symbol_index_font"
+            font=self.symbol_font.copy(), name="symbol_index_font"
         )
         self.symbol_index_font.configure(size=8)
         self.symbol_font_sel = tkfont.Font(
-            font=self.symbol_font.copy(),
-            name="symbol_font_sel"
+            font=self.symbol_font.copy(), name="symbol_font_sel"
         )
         self.symbol_font_sel.configure(weight="bold")
         self.symbol_index_font_sel = tkfont.Font(
-            font=self.symbol_index_font.copy(),
-            name="symbol_index_font_sel"
+            font=self.symbol_index_font.copy(), name="symbol_index_font_sel"
         )
         self.symbol_index_font_sel.configure(weight="bold")
 
@@ -300,7 +297,7 @@ class AppContainer(tk.Tk):
         self.bind("<<AtomButtonPress>>", self.button_pressed_atom)
         self.bind("<<BondButton0Press>>", self.button_pressed_order)
         self.bind("<<BondButton1Press>>", self.button_pressed_dativity)
-    
+
     def button_pressed_mode(self, _event: tk.Event) -> None:
         if not self.toolbar.is_select:
             self.select_nothing()
@@ -445,6 +442,10 @@ class AppContainer(tk.Tk):
             self.selected += list(self.mol_canvas.find_withtag(f"atom_text-{atom_id}"))
             self.mol_canvas.itemconfigure(f"atom-{atom_id}", fill="green")
             self.mol_canvas.itemconfigure(f"atom_text-{atom_id}", fill="green")
+            self.mol_canvas.itemconfigure(
+                f"atom_rad-{atom_id}", outline="green", width=3
+            )
+            self.mol_canvas.itemconfigure(f"atom_lpair-{atom_id}", width=2)
             for sel_element in self.selected:
                 if "atom_text" in self.mol_canvas.gettags(sel_element):
                     self.change_font_weight(sel_element, "bold")
@@ -578,9 +579,12 @@ class AppContainer(tk.Tk):
             self.event_listened = True
             return
 
-    def change_font_weight(self, item_num: int, new_weight: Literal["bold", "normal"]) -> None:
-        assert "atom_text" in self.mol_canvas.gettags(item_num), \
-            "Only text items have fonts."
+    def change_font_weight(
+        self, item_num: int, new_weight: Literal["bold", "normal"]
+    ) -> None:
+        assert "atom_text" in self.mol_canvas.gettags(
+            item_num
+        ), "Only text items have fonts."
         if "index" in self.mol_canvas.gettags(item_num):
             if new_weight == "bold":
                 self.mol_canvas.itemconfigure(item_num, font=self.symbol_index_font_sel)
@@ -605,6 +609,10 @@ class AppContainer(tk.Tk):
             if "atom_text" in tags:
                 self.change_font_weight(sel_item, "normal")
             if "bond" in tags:
+                self.mol_canvas.itemconfigure(sel_item, width=1)
+            if "atom_rad" in tags:
+                self.mol_canvas.itemconfigure(sel_item, outline="black", width=1)
+            if "atom_lpair" in tags:
                 self.mol_canvas.itemconfigure(sel_item, width=1)
         self.selected = []
 
@@ -781,10 +789,120 @@ class AppContainer(tk.Tk):
     def hide_atom(self, atom: eng.Atom) -> bool:
         """Determines if an atom should be hidden (and symbol not shown on the formula)"""
         if atom.symbol == "C" and self.toolbar.hide_carbon and len(atom.bonds) > 0:
+            if len(atom.bonds) > 2:
+                return True
+            if len(atom.bonds) == 2:
+                angles = atom.bond_angles
+                angles.sort()
+                return not (pi - 0.1 < angles[1] - angles[0] < pi + 0.1)
             linked_atoms_sym = [bond.other_atoms(atom)[0].symbol for bond in atom.bonds]
-            if "C" in linked_atoms_sym:
+            link_at_linkum = [
+                len(bond.other_atoms(atom)[0].bonds) for bond in atom.bonds
+            ]
+            secondlinks = sum(link_at_linkum)
+            if "C" in linked_atoms_sym and secondlinks > 1:
                 return True
         return False
+
+    def draw_atom(self, atom: eng.Atom, atom_id: int) -> list[int]:
+        atom_s: list[int] = []
+        if self.hide_atom(atom):
+            atom_s.append(
+                self.mol_canvas.create_rectangle(
+                    atom.coord_x - MINDIST / 3,
+                    atom.coord_y - MINDIST / 3,
+                    atom.coord_x + MINDIST / 3,
+                    atom.coord_y + MINDIST / 3,
+                    width=0,
+                    tags=("atom", f"atom-{atom_id}", "empty"),
+                )
+            )
+        else:
+            textrep: str = atom.symbol
+            if (
+                self.toolbar.empty_val_style == self.toolbar.EmptyValence.HYDROGENS
+                and atom.empty_valence > 0
+            ):
+                textrep += "H"
+            atom_s.append(
+                self.mol_canvas.create_text(
+                    atom.coord_x,
+                    atom.coord_y,
+                    text=textrep,
+                    justify="center",
+                    font=self.symbol_font,
+                    tags=(
+                        "atom",
+                        f"atom-{atom_id}",
+                        "atom_text",
+                        f"atom_text-{atom_id}",
+                    ),
+                )
+            )
+            if (
+                self.toolbar.empty_val_style == self.toolbar.EmptyValence.HYDROGENS
+                and atom.empty_valence > 1
+            ):
+                (_, bby1, bbx2, bby2) = self.mol_canvas.bbox(atom_s[0])
+                atom_s.append(
+                    self.mol_canvas.create_text(
+                        bbx2 + 2,
+                        (bby1 + bby2 * 3) / 4,
+                        text=f"{atom.empty_valence}",
+                        justify="left",
+                        font=self.symbol_index_font,
+                        tags=(
+                            f"atom-{atom_id}",
+                            "atom_text",
+                            f"atom_text-{atom_id}",
+                            "index",
+                        ),
+                    )
+                )
+            elif (
+                self.toolbar.empty_val_style == self.toolbar.EmptyValence.ELECTRONS
+                and not self.hide_atom(atom)
+            ):
+                lone_pair: int = atom.lone_pairs
+                radical: int = atom.radicals
+                el_angles: list[float] = atom.electron_angles
+                assert lone_pair + radical == len(
+                    el_angles
+                ), "Error in electron number calculation"
+                for angle in el_angles:
+                    xcent: float = atom.coord_x + MINDIST / 2 * cos(angle)
+                    ycent: float = atom.coord_y + MINDIST / 2 * sin(angle)
+                    if lone_pair > 0:
+                        line_coord: tuple[float, float, float, float] = (
+                            xcent + MINDIST / 4 * cos(angle - pi / 2),
+                            ycent + MINDIST / 4 * sin(angle - pi / 2),
+                            xcent - MINDIST / 4 * cos(angle - pi / 2),
+                            ycent - MINDIST / 4 * sin(angle - pi / 2),
+                        )
+                        atom_s.append(
+                            self.mol_canvas.create_line(
+                                line_coord,
+                                tags=(
+                                    f"atom-{atom_id}",
+                                    "atom_lpair",
+                                    f"atom_lpair-{atom_id}",
+                                ),
+                            )
+                        )
+                        lone_pair -= 1
+                    else:
+                        atom_s.append(
+                            self.mol_canvas.create_oval(
+                                (xcent, ycent, xcent + 1, ycent + 1),
+                                tags=(
+                                    f"atom-{atom_id}",
+                                    "atom_rad",
+                                    f"atom_rad-{atom_id}",
+                                ),
+                            )
+                        )
+                        radical -= 1
+        return atom_s
 
     def redraw_all(self) -> None:
         """Redraws all atoms and bonds on a freshly cleared canvas."""
@@ -819,51 +937,10 @@ class AppContainer(tk.Tk):
             self.mol_canvas.tag_bind(
                 f"bond-{bond_id}",
                 "<Button-1>",
-                lambda event, bond_id=bond_id: self.click_bond(
-                    bond_id, event
-                ),
+                lambda event, bond_id=bond_id: self.click_bond(bond_id, event),
             )
         for atom_id, atom in enumerate(self.atoms):
-            atom_s: list[int] = []
-            if self.hide_atom(atom):
-                atom_s.append(self.mol_canvas.create_rectangle(
-                    atom.coord_x - MINDIST / 3,
-                    atom.coord_y - MINDIST / 3,
-                    atom.coord_x + MINDIST / 3,
-                    atom.coord_y + MINDIST / 3,
-                    width=0,
-                    tags=("atom", f"atom-{atom_id}", "empty"),
-                ))
-            else:
-                textrep: str = atom.symbol
-                if (
-                    self.toolbar.empty_val_style ==
-                    self.toolbar.EmptyValence.HYDROGENS
-                    and atom.empty_valence > 0
-                ):
-                    textrep += "H"
-                atom_s.append(self.mol_canvas.create_text(
-                    atom.coord_x,
-                    atom.coord_y,
-                    text=textrep,
-                    justify="center",
-                    font=self.symbol_font,
-                    tags=("atom", f"atom-{atom_id}", "atom_text", f"atom_text-{atom_id}"),
-                    ))
-                if (
-                    self.toolbar.empty_val_style ==
-                    self.toolbar.EmptyValence.HYDROGENS
-                    and atom.empty_valence > 1
-                ):
-                    (_, bby1, bbx2, bby2) = self.mol_canvas.bbox(atom_s[0])
-                    atom_s.append(self.mol_canvas.create_text(
-                        bbx2 + 2,
-                        (bby1 + bby2 * 3) / 4,
-                        text=f"{atom.empty_valence}",
-                        justify="left",
-                        font=self.symbol_index_font,
-                        tags=("atom_text", f"atom_text-{atom_id}", "index")
-                        ))
+            atom_s: list[int] = self.draw_atom(atom, atom_id)
             for atom_graph_ind in atom_s:
                 self.graphics[atom_graph_ind] = atom
             if atom in selected_objects:

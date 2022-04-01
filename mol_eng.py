@@ -120,7 +120,9 @@ class CovBond:
     def __repr__(self) -> str:
         return super().__repr__() + "\n" + self.describe()
 
-    def electrons_calc(self, order: float = 1, dative: float = 0) -> Optional[list[int]]:
+    def electrons_calc(
+        self, order: float = 1, dative: float = 0
+    ) -> Optional[list[int]]:
         """Converts order and dativity values to electron configuration"""
         if order < 1:
             return None
@@ -291,24 +293,19 @@ class Atom:
                 repeat = el_num
                 if len(angles) == 1:
                     start = angles[0] + diff
-            elif len(angles) == 2 and pi - 0.1 < rel_ang[0] < pi + 0.1:
-                diff = pi
-                start = angles[0] + pi/2
-                repeat = 1
             else:
                 largest: float = max(rel_ang)
                 largest_loc: int = rel_ang.index(largest)
                 start = angles[largest_loc]
-                if largest_loc == len(rel_ang)-1:
+                if largest_loc == len(rel_ang) - 1:
                     diff = angles[0] + 2 * pi - start
                 else:
-                    diff = angles[largest_loc+1] - start
-                if largest > pi - 0.1:
-                    diff = diff / (el_num + 1)
-                    repeat = el_num
-                else:
-                    diff = diff / (3 - el_num % 2)
-                    repeat = 2 - el_num % 2
+                    diff = angles[largest_loc + 1] - start
+                rel_ang2 = rel_ang.copy()
+                rel_ang2.pop(largest_loc)
+                section: int = int(round(largest / max(rel_ang2) + 0.2))
+                repeat = min(section, el_num)
+                diff = diff / (repeat + 1)
                 start += diff
             for index in range(repeat):
                 angle = start + index * diff
@@ -530,8 +527,8 @@ def add_atom_by_symbol(symbol: str, coords: Sequence[float]) -> Optional[Atom]:
 def relative_angles(angle_list: list[float]) -> list[float]:
     relative_angl: list[float] = []
     if len(angle_list) > 0:
-        for a, b in zip(angle_list, angle_list[1:]+[angle_list[0]+2*pi]):
-            relative_angl.append(b-a)
+        for a, b in zip(angle_list, angle_list[1:] + [angle_list[0] + 2 * pi]):
+            relative_angl.append(b - a)
     return relative_angl
 
 
