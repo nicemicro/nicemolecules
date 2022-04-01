@@ -712,6 +712,7 @@ class AppContainer(tk.Tk):
                 atom.coord_x + deltax,
                 atom.coord_y + deltay,
                 text=self.toolbar.atom_symbol,
+                font=self.symbol_font,
                 justify="center",
                 fill="#aaaaaa",
                 tags=("ui_help", f"ui_help-{num}", f"atom_here-{num}"),
@@ -804,7 +805,183 @@ class AppContainer(tk.Tk):
                 return True
         return False
 
+    def draw_atom_electrons(self, atom: eng.Atom, atom_id: int) -> list[int]:
+        """Draws lone pairs and radicals around atoms."""
+        atom_s: list[int] = []
+        lone_pair: int = atom.lone_pairs
+        radical: int = atom.radicals
+        el_angles: list[float] = atom.electron_angles
+        assert lone_pair + radical == len(
+            el_angles
+        ), "Error in electron number calculation"
+        for angle in el_angles:
+            xcent: float = atom.coord_x + MINDIST / 2 * cos(angle)
+            ycent: float = atom.coord_y + MINDIST / 2 * sin(angle)
+            if lone_pair > 0:
+                line_coord: tuple[float, float, float, float] = (
+                    xcent + MINDIST / 4 * cos(angle - pi / 2),
+                    ycent + MINDIST / 4 * sin(angle - pi / 2),
+                    xcent - MINDIST / 4 * cos(angle - pi / 2),
+                    ycent - MINDIST / 4 * sin(angle - pi / 2),
+                )
+                atom_s.append(
+                    self.mol_canvas.create_line(
+                        line_coord,
+                        tags=(
+                            f"atom-{atom_id}",
+                            "atom_lpair",
+                            f"atom_lpair-{atom_id}",
+                        ),
+                    )
+                )
+                lone_pair -= 1
+            else:
+                atom_s.append(
+                    self.mol_canvas.create_oval(
+                        (xcent, ycent, xcent + 1, ycent + 1),
+                        tags=(
+                            f"atom-{atom_id}",
+                            "atom_rad",
+                            f"atom_rad-{atom_id}",
+                        ),
+                    )
+                )
+                radical -= 1
+        return atom_s
+
+    def draw_atom_with_H(self, atom: eng.Atom, atom_id: int) -> list[int]:
+        """Draws the atoms with H next to it if needed"""
+        atom_s: list[int] = []
+        right: bool = False
+        left: bool = False
+        for angle in atom.bond_angles:
+            angle += pi / 2
+            if angle > 2 * pi:
+                angle -= 2 * pi
+            if pi / 6 + 0.1 < angle < pi - pi / 6 - 0.1:
+                right = True
+            if pi + pi / 6 + 0.1 < angle < 2 * pi - pi / 6 - 0.1:
+                left = True
+        if left == right:
+            atom_s.append(
+                self.mol_canvas.create_text(
+                    atom.coord_x,
+                    atom.coord_y,
+                    text=f"{atom.symbol}H",
+                    justify="center",
+                    font=self.symbol_font,
+                    tags=(
+                        f"atom-{atom_id}",
+                        "atom_text",
+                        f"atom_text-{atom_id}",
+                    ),
+                )
+            )
+            if atom.empty_valence == 1:
+                return atom_s
+            (_, bby1, bbx2, bby2) = self.mol_canvas.bbox(f"atom-{atom_id}")
+            atom_s.append(
+                self.mol_canvas.create_text(
+                    bbx2 + 2,
+                    (bby1 + bby2 * 3) / 4,
+                    text=f"{atom.empty_valence}",
+                    justify="left",
+                    font=self.symbol_index_font,
+                    tags=(
+                        f"atom-{atom_id}",
+                        "atom_text",
+                        f"atom_text-{atom_id}",
+                        "index",
+                    ),
+                )
+            )
+            return atom_s
+        atom_s.append(
+            self.mol_canvas.create_text(
+                atom.coord_x,
+                atom.coord_y,
+                text=atom.symbol,
+                justify="center",
+                font=self.symbol_font,
+                tags=(
+                    f"atom-{atom_id}",
+                    "atom_text",
+                    f"atom_text-{atom_id}",
+                ),
+            )
+        )
+        (bbx1, bby1, bbx2, bby2) = self.mol_canvas.bbox(f"atom-{atom_id}")
+        if left:
+            atom_s.append(
+                self.mol_canvas.create_text(
+                    bbx2 + 3,
+                    atom.coord_y,
+                    text="H",
+                    justify="left",
+                    font=self.symbol_font,
+                    tags=(
+                        f"atom-{atom_id}",
+                        "atom_text",
+                        f"atom_text-{atom_id}",
+                    ),
+                )
+            )
+            if atom.empty_valence == 1:
+                return atom_s
+            (bbx1, bby1, bbx2, bby2) = self.mol_canvas.bbox(f"atom-{atom_id}")
+            atom_s.append(
+                self.mol_canvas.create_text(
+                    bbx2 + 2,
+                    (bby1 + bby2 * 3) / 4,
+                    text=f"{atom.empty_valence}",
+                    justify="left",
+                    font=self.symbol_index_font,
+                    tags=(
+                        f"atom-{atom_id}",
+                        "atom_text",
+                        f"atom_text-{atom_id}",
+                        "index",
+                    ),
+                )
+            )
+            return atom_s
+        if not right:
+            assert False, "Unreachable"
+        if atom.empty_valence > 1:
+            atom_s.append(
+                self.mol_canvas.create_text(
+                    bbx1 - 2,
+                    (bby1 + bby2 * 3) / 4,
+                    text=f"{atom.empty_valence}",
+                    justify="right",
+                    font=self.symbol_index_font,
+                    tags=(
+                        f"atom-{atom_id}",
+                        "atom_text",
+                        f"atom_text-{atom_id}",
+                        "index",
+                    ),
+                )
+            )
+            (bbx1, bby1, bbx2, bby2) = self.mol_canvas.bbox(f"atom-{atom_id}")
+        atom_s.append(
+            self.mol_canvas.create_text(
+                bbx1 - 3,
+                atom.coord_y,
+                text="H",
+                justify="right",
+                font=self.symbol_font,
+                tags=(
+                    f"atom-{atom_id}",
+                    "atom_text",
+                    f"atom_text-{atom_id}",
+                ),
+            )
+        )
+        return atom_s
+
     def draw_atom(self, atom: eng.Atom, atom_id: int) -> list[int]:
+        """Draws the representation of the atom on the screen."""
         atom_s: list[int] = []
         if self.hide_atom(atom):
             atom_s.append(
@@ -817,18 +994,18 @@ class AppContainer(tk.Tk):
                     tags=("atom", f"atom-{atom_id}", "empty"),
                 )
             )
+            return atom_s
+        if (
+            self.toolbar.empty_val_style == self.toolbar.EmptyValence.HYDROGENS
+            and atom.empty_valence > 0
+        ):
+            atom_s += self.draw_atom_with_H(atom, atom_id)
         else:
-            textrep: str = atom.symbol
-            if (
-                self.toolbar.empty_val_style == self.toolbar.EmptyValence.HYDROGENS
-                and atom.empty_valence > 0
-            ):
-                textrep += "H"
             atom_s.append(
                 self.mol_canvas.create_text(
                     atom.coord_x,
                     atom.coord_y,
-                    text=textrep,
+                    text=atom.symbol,
                     justify="center",
                     font=self.symbol_font,
                     tags=(
@@ -839,69 +1016,8 @@ class AppContainer(tk.Tk):
                     ),
                 )
             )
-            if (
-                self.toolbar.empty_val_style == self.toolbar.EmptyValence.HYDROGENS
-                and atom.empty_valence > 1
-            ):
-                (_, bby1, bbx2, bby2) = self.mol_canvas.bbox(atom_s[0])
-                atom_s.append(
-                    self.mol_canvas.create_text(
-                        bbx2 + 2,
-                        (bby1 + bby2 * 3) / 4,
-                        text=f"{atom.empty_valence}",
-                        justify="left",
-                        font=self.symbol_index_font,
-                        tags=(
-                            f"atom-{atom_id}",
-                            "atom_text",
-                            f"atom_text-{atom_id}",
-                            "index",
-                        ),
-                    )
-                )
-            elif (
-                self.toolbar.empty_val_style == self.toolbar.EmptyValence.ELECTRONS
-                and not self.hide_atom(atom)
-            ):
-                lone_pair: int = atom.lone_pairs
-                radical: int = atom.radicals
-                el_angles: list[float] = atom.electron_angles
-                assert lone_pair + radical == len(
-                    el_angles
-                ), "Error in electron number calculation"
-                for angle in el_angles:
-                    xcent: float = atom.coord_x + MINDIST / 2 * cos(angle)
-                    ycent: float = atom.coord_y + MINDIST / 2 * sin(angle)
-                    if lone_pair > 0:
-                        line_coord: tuple[float, float, float, float] = (
-                            xcent + MINDIST / 4 * cos(angle - pi / 2),
-                            ycent + MINDIST / 4 * sin(angle - pi / 2),
-                            xcent - MINDIST / 4 * cos(angle - pi / 2),
-                            ycent - MINDIST / 4 * sin(angle - pi / 2),
-                        )
-                        atom_s.append(
-                            self.mol_canvas.create_line(
-                                line_coord,
-                                tags=(
-                                    f"atom-{atom_id}",
-                                    "atom_lpair",
-                                    f"atom_lpair-{atom_id}",
-                                ),
-                            )
-                        )
-                        lone_pair -= 1
-                    else:
-                        atom_s.append(
-                            self.mol_canvas.create_oval(
-                                (xcent, ycent, xcent + 1, ycent + 1),
-                                tags=(
-                                    f"atom-{atom_id}",
-                                    "atom_rad",
-                                    f"atom_rad-{atom_id}",
-                                ),
-                            )
-                        )
-                        radical -= 1
+            if self.toolbar.empty_val_style == self.toolbar.EmptyValence.ELECTRONS:
+                atom_s += self.draw_atom_electrons(atom, atom_id)
         return atom_s
 
     def redraw_all(self) -> None:
