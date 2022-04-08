@@ -525,11 +525,46 @@ def add_atom_by_symbol(symbol: str, coords: Sequence[float]) -> Optional[Atom]:
 
 
 def relative_angles(angle_list: list[float]) -> list[float]:
+    """Calculates the difference between angles that are consecutive
+    in the angle list. Angles are always clcockwise, positive angles."""
     relative_angl: list[float] = []
     if len(angle_list) > 0:
         for a, b in zip(angle_list, angle_list[1:] + [angle_list[0] + 2 * pi]):
             relative_angl.append(b - a)
     return relative_angl
+
+
+def angles_rel_angle(angle_list: list[float], fix_angle: float) -> list[float]:
+    """Calculates the angles relative to a fixed angle from a
+    list. Results are between -pi and +pi."""
+    relative_angl: list[float] = []
+    angle_calc: float = 0
+    for angle in angle_list:
+        angle_calc = angle - fix_angle
+        while angle_calc > pi:
+            angle_calc -= 2 * pi
+        while angle_calc < -pi:
+            angle_calc += 2 * pi
+        relative_angl.append(angle_calc)
+    return relative_angl
+
+
+def angle_side_calc(angles: list[float], threshold: float = 0.0001) -> tuple[int, int]:
+    """Returns the number of angles to the left and to the right with
+    higher deviance from the center than the threshold. Returns:
+    (angles_on_left, angles_on_right)"""
+    left: int = 0
+    right: int = 0
+    for angle in angles:
+        while angle > pi:
+            angle -= 2 * pi
+        while angle < -pi:
+            angle += 2 * pi
+        if threshold < angle < pi - threshold:
+            right += 1
+        if -pi + threshold < angle < -threshold:
+            left += 1
+    return left, right
 
 
 def find_molecule(one_atom: Atom) -> tuple:

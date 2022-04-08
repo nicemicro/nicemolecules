@@ -10,7 +10,7 @@ import mol_tst as tst
 import tkinter as tk
 from tkinter import ttk
 from tkinter import font as tkfont
-from math import sqrt, cos, sin, pi
+from math import sqrt, cos, sin, pi, atan2, tan
 from enum import IntEnum, auto
 from typing import Optional, Sequence, Union, Any, Literal
 
@@ -651,19 +651,12 @@ class AppContainer(tk.Tk):
                 != eng.BondingError.OK
             ):
                 continue
-            cut_bond: tuple[bool, bool]
-            cut_bond = (not self.hide_atom(atom_from), not self.hide_atom(atom_to))
-            self.draw_bond(
-                (
-                    atom_from.coord_x,
-                    atom_from.coord_y,
-                    atom_to.coord_x,
-                    atom_to.coord_y,
-                ),
+            self.draw_bond_atoms(
+                atom_from,
+                atom_to,
                 -1,
                 self.toolbar.bond_order,
                 self.toolbar.bond_dativity,
-                cut=cut_bond,
                 color="#aaaaaa",
                 tags=("ui_help", f"ui_help-{atom_link_num}"),
             )
@@ -683,18 +676,29 @@ class AppContainer(tk.Tk):
             over_atom = False
             for obj in over:
                 tags: Sequence[str] = self.mol_canvas.gettags(obj)
-                if len(tags) > 0 and ("atom" in tags or "bond" in tags):
+                if len(tags) > 0 and (
+                    "atom" in tags or "bond" in tags or "atom_text" in tags
+                ):
                     over_atom = True
                     break
             if over_atom:
                 num += 1
                 continue
-            cut_bond: tuple[bool, bool]
+            self.mol_canvas.create_text(
+                atom.coord_x + deltax,
+                atom.coord_y + deltay,
+                text=self.toolbar.atom_symbol,
+                font=self.symbol_font,
+                justify="center",
+                fill="#aaaaaa",
+                tags=("ui_help", f"ui_help-{num}", f"atom_here-{num}"),
+            )
+            obscure: tuple[str, str]
             if self.hide_atom(atom):
-                cut_bond = (False, True)
+                obscure = ("", f"atom_here-{num}")
             else:
-                cut_bond = (True, True)
-            self.draw_bond(
+                obscure = (f"atom_text-{self.atoms.index(atom)}", f"atom_here-{num}")
+            self.draw_bond_lines(
                 (
                     atom.coord_x,
                     atom.coord_y,
@@ -704,18 +708,9 @@ class AppContainer(tk.Tk):
                 30,
                 self.toolbar.bond_order,
                 self.toolbar.bond_dativity,
-                cut=cut_bond,
+                obscure_area=obscure,
                 color="#aaaaaa",
                 tags=("ui_help", f"ui_help-{num}"),
-            )
-            self.mol_canvas.create_text(
-                atom.coord_x + deltax,
-                atom.coord_y + deltay,
-                text=self.toolbar.atom_symbol,
-                font=self.symbol_font,
-                justify="center",
-                fill="#aaaaaa",
-                tags=("ui_help", f"ui_help-{num}", f"atom_here-{num}"),
             )
             num += 1
 
@@ -728,43 +723,154 @@ class AppContainer(tk.Tk):
         self.redraw_all()
         return new_atom
 
+    def draw_bond_atoms(
+        self,
+        atom1: eng.Atom,
+        atom2: eng.Atom,
+        bondlen: float = -1,
+        order: float = -1,
+        dativity: float = 0,
+        color: str = "black",
+        tags: Optional[tuple[str, ...]] = None,
+    ) -> list[int]:
+        """Draws the bond between two atom instances."""
+        x1, y1, x2, y2 = atom1.coord_x, atom1.coord_y, atom2.coord_x, atom2.coord_y
+        if bondlen == -1:
+            bondlen = sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+        angle: float = atan2(
+            atom2.coord_y - atom1.coord_y, atom2.coord_x - atom1.coord_x
+        )
+        reverse_second_bond: bool = False
+        if order == 2:
+            left1, right1 = eng.angle_side_calc(
+                eng.angles_rel_angle(atom1.bond_angles, angle), 0.01
+            )
+            left2, right2 = eng.angle_side_calc(
+                eng.angles_rel_angle(atom2.bond_angles, angle), 0.01
+            )
+            reverse_second_bond = left1 + left2 > right1 + right2
+        atomtag1: str = ""
+        atomtag2: str = ""
+        if not self.hide_atom(atom1):
+            atomtag1 = f"atom_text-{self.atoms.index(atom1)}"
+        if not self.hide_atom(atom2):
+            atomtag2 = f"atom_text-{self.atoms.index(atom2)}"
+        bond_objects = self.draw_bond_lines(
+            (x1, y1, x2, y2),
+            bondlen,
+            order,
+            dativity,
+            obscure_area=(atomtag1, atomtag2),
+            reverse_second_bond=reverse_second_bond,
+            color=color,
+            tags=tags,
+        )
+        return bond_objects
+
     def draw_bond(
+        self,
+        bond: eng.CovBond,
+        color: str = "black",
+        tags: Optional[tuple[str, ...]] = None,
+    ) -> list[int]:
+        """Calls the bond line drawing function with parameters extracted from the
+        instance of CobBond it receives."""
+        atom1: eng.Atom = bond.atoms[0]
+        atom2: eng.Atom = bond.atoms[1]
+        bond_objects = self.draw_bond_atoms(
+            atom1, atom2, bond.length, bond.order, bond.dativity, color=color, tags=tags
+        )
+        return bond_objects
+
+    def find_edge(
+        self, coords: tuple[float, float], tag: str, angle: float
+    ) -> tuple[float, float]:
+        """Finds the coordinates at the edge of canvas objects with tag, starting from
+        coords, moving in the direction of angle."""
+        while angle > pi:
+            angle -= 2 * pi
+        while angle < -pi:
+            angle += 2 * pi
+        x_look, y_look = coords
+        while True:
+            item_ids = self.mol_canvas.find_overlapping(x_look, y_look, x_look, y_look)
+            found_id: int = -1
+            for item_id in item_ids:
+                if tag in self.mol_canvas.gettags(item_id):
+                    found_id = item_id
+                    break
+            if found_id == -1:
+                return x_look, y_look
+            (xb1, yb1, xb2, yb2) = self.mol_canvas.bbox(found_id)
+            if angle == 0:
+                x_look = xb2 + 1
+                continue
+            if angle == pi / 2:
+                y_look = yb2 + 1
+                continue
+            if angle == pi or angle == -pi:
+                x_look = xb1 - 1
+                continue
+            if angle == -pi / 2:
+                y_look = yb1 - 1
+                continue
+            dx: float = 0
+            dy: float = 0
+            if -pi < angle < 0:
+                dx = (yb1 - 1 - y_look) / tan(angle)
+            if -pi / 2 < angle < pi / 2:
+                dy = (xb2 + 1 - x_look) * tan(angle)
+            if 0 < angle < pi:
+                dx = (yb2 + 1 - y_look) / tan(angle)
+            if angle > pi / 2 or angle < -pi / 2:
+                dy = (xb1 - 1 - x_look) * tan(angle)
+            x_look = max(min(x_look + dx, xb2 + 1), xb1 - 1)
+            y_look = max(min(y_look + dy, yb2 + 1), yb1 - 1)
+
+    def draw_bond_lines(
         self,
         coords: tuple[float, float, float, float],
         bondlen: float = -1,
         order: float = -1,
         dativity: float = 0,
-        cut: Optional[tuple[bool, bool]] = None,
+        obscure_area: Optional[tuple[str, str]] = None,
+        reverse_second_bond: bool = False,
         color: str = "black",
         tags: Optional[tuple[str, ...]] = None,
     ) -> list[int]:
         """Draws a bond between two atoms and returns the list of line
         IDs on the canvas that represent the chemical bond."""
         x1, y1, x2, y2 = coords
+        angle: float = atan2(y2 - y1, x2 - x1)
         if tags is None:
             tags = ()
         if bondlen == -1:
             bondlen = sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
         if order == -1:
             order = self.toolbar.bond_order
-        if cut is None:
-            cut = (True, True)
-        assert cut is not None
-        obscure = 7
+        if obscure_area is None:
+            obscure_area = ("", "")
+        assert obscure_area is not None
         shift = 2
-        bondshifts = list(range(1 - int(order), int(order) + 1, 2))
+        order_i: int = int(order)
+        if (obscure_area[0] == "") + (obscure_area[1] == "") > 0:
+            bondshifts = list(
+                range(2 - order_i % 2 - order_i, order_i + 2 - order_i % 2, 2)
+            )
+        else:
+            bondshifts = list(range(1 - order_i, order_i + 1, 2))
+        if obscure_area[0] != "":
+            xd1, yd1 = self.find_edge((x1, y1), obscure_area[0], angle)
+        else:
+            xd1, yd1 = x1, y1
+        if obscure_area[1] != "":
+            xd2, yd2 = self.find_edge((x2, y2), obscure_area[1], pi + angle)
+        else:
+            xd2, yd2 = x2, y2
         bond_objects: list[int] = []
         for bondpart in bondshifts:
-            if cut[0]:
-                xd1 = x1 + (obscure / bondlen) * (x2 - x1)
-                yd1 = y1 + (obscure / bondlen) * (y2 - y1)
-            else:
-                xd1, yd1 = x1, y1
-            if cut[1]:
-                xd2 = x2 - (obscure / bondlen) * (x2 - x1)
-                yd2 = y2 - (obscure / bondlen) * (y2 - y1)
-            else:
-                xd2, yd2 = x2, y2
+            if reverse_second_bond:
+                bondpart *= -1
             xs = (y1 - y2) / bondlen * shift * bondpart
             ys = (x2 - x1) / bondlen * shift * bondpart
             if dativity == 0:
@@ -852,16 +958,11 @@ class AppContainer(tk.Tk):
     def draw_atom_with_H(self, atom: eng.Atom, atom_id: int) -> list[int]:
         """Draws the atoms with H next to it if needed"""
         atom_s: list[int] = []
-        right: bool = False
-        left: bool = False
-        for angle in atom.bond_angles:
-            angle += pi / 2
-            if angle > 2 * pi:
-                angle -= 2 * pi
-            if pi / 6 + 0.1 < angle < pi - pi / 6 - 0.1:
-                right = True
-            if pi + pi / 6 + 0.1 < angle < 2 * pi - pi / 6 - 0.1:
-                left = True
+        left_n, right_n = eng.angle_side_calc(
+            eng.angles_rel_angle(atom.bond_angles, -pi / 2), pi / 6 + 0.1
+        )
+        right: bool = right_n > 0
+        left: bool = left_n > 0
         if left == right:
             atom_s.append(
                 self.mol_canvas.create_text(
@@ -871,6 +972,7 @@ class AppContainer(tk.Tk):
                     justify="center",
                     font=self.symbol_font,
                     tags=(
+                        "atom",
                         f"atom-{atom_id}",
                         "atom_text",
                         f"atom_text-{atom_id}",
@@ -904,6 +1006,7 @@ class AppContainer(tk.Tk):
                 justify="center",
                 font=self.symbol_font,
                 tags=(
+                    "atom",
                     f"atom-{atom_id}",
                     "atom_text",
                     f"atom_text-{atom_id}",
@@ -1027,34 +1130,6 @@ class AppContainer(tk.Tk):
         selected_objects = [self.graphics[item] for item in self.selected]
         self.selected = []
         self.graphics = {}
-        for bond_id, bond in enumerate(self.bonds):
-            x1, y1, x2, y2 = bond.coords
-            bondlen = bond.length
-            if bondlen == 0:
-                continue
-            bond_order = bond.order
-            dativity = bond.dativity
-            cut_bond = (
-                not self.hide_atom(bond.atoms[0]),
-                not self.hide_atom(bond.atoms[1]),
-            )
-            bond_drawings: list[int] = self.draw_bond(
-                (x1, y1, x2, y2),
-                bondlen,
-                bond_order,
-                dativity,
-                cut=cut_bond,
-                tags=("bond", f"bond-{bond_id}"),
-            )
-            for bondid in bond_drawings:
-                self.graphics[bondid] = bond
-            if bond in selected_objects:
-                self.selected += bond_drawings
-            self.mol_canvas.tag_bind(
-                f"bond-{bond_id}",
-                "<Button-1>",
-                lambda event, bond_id=bond_id: self.click_bond(bond_id, event),
-            )
         for atom_id, atom in enumerate(self.atoms):
             atom_s: list[int] = self.draw_atom(atom, atom_id)
             for atom_graph_ind in atom_s:
@@ -1075,6 +1150,23 @@ class AppContainer(tk.Tk):
                 f"atom-{atom_id}",
                 "<B1-Motion>",
                 lambda event, atom_id=atom_id: self.drag_atom(atom_id, event),
+            )
+        for bond_id, bond in enumerate(self.bonds):
+            bondlen = bond.length
+            if bondlen == 0:
+                continue
+            bond_drawings: list[int] = self.draw_bond(
+                bond,
+                tags=("bond", f"bond-{bond_id}"),
+            )
+            for bondid in bond_drawings:
+                self.graphics[bondid] = bond
+            if bond in selected_objects:
+                self.selected += bond_drawings
+            self.mol_canvas.tag_bind(
+                f"bond-{bond_id}",
+                "<Button-1>",
+                lambda event, bond_id=bond_id: self.click_bond(bond_id, event),
             )
         for item_num in self.selected:
             tags: Sequence[str] = self.mol_canvas.gettags(item_num)
