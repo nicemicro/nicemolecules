@@ -81,10 +81,20 @@ def description(atoms, to_show = None):
         print(atoms[show_this].bonds)
         print(atoms[show_this].bonds[0].dativity)
 
+def optimize_tst():
+    molecules, bonds = SF6(4, "Xe", "F")
+    print(molecules)
+    print([bond.length for bond in bonds])
+    eng.optimize_2D(molecules[0])
+    print("== After optimization ==")
+    print(molecules)
+    print([bond.length for bond in bonds])
+
 if __name__ == '__main__':
     #molecules, bonds = carbon_monoxide()
     #molecules, bonds = XH("B")
-    molecules, bonds = SF6(4, "Xe", "F")
+    #molecules, bonds = SF6(4, "Xe", "F")
     #molecules, bonds = methane()
     #molecules, bonds = test3()
     #description(molecules, [0])
+    optimize_tst()

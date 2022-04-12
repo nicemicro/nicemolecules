@@ -5,7 +5,7 @@ Created on Mon Feb 21 15:52:19 2022
 @author: nicemicro
 """
 
-from math import sqrt, atan2, pi
+from math import sqrt, atan2, pi, sin, cos
 from typing import Optional, Sequence
 from enum import IntEnum, auto
 import elements as el
@@ -575,7 +575,7 @@ def find_molecule(one_atom: Atom) -> tuple:
     current_num: int = 0
     while current_num < len(atomlist):
         current_atom: Atom = atomlist[current_num]
-        for bonded_atom in current_atom.bonded_atoms():
+        for bonded_atom in current_atom.bonded_atoms:
             if bonded_atom not in atomlist:
                 atomlist.append(bonded_atom)
             bond_instance: Optional[CovBond]
@@ -584,3 +584,32 @@ def find_molecule(one_atom: Atom) -> tuple:
                 bondlist.append(bond_instance)
         current_num += 1
     return atomlist, bondlist
+
+
+def optimize_2D(
+    one_atom: Atom,
+    iterator: int = 100,
+    target_len: float = 30,
+    alpha: float = 0.1,
+) -> None:
+    """Finds the molecule that contains the atom, then optimzies the 2D
+    formula."""
+    atomlist: list[Atom]
+    atomlist, _ = find_molecule(one_atom)
+    delta: list[tuple[float, float]]
+    delta_len: float
+    delta_x: float
+    delta_y: float
+    while iterator > 0:
+        delta = []
+        for atom in atomlist:
+            delta_x, delta_y = 0, 0
+            for bond, angle in zip(atom.bonds, atom.bond_angles):
+                delta_len = (bond.length - target_len) * alpha
+                delta_x += delta_len * cos(angle)
+                delta_y += delta_len * sin(angle)
+            delta.append((delta_x, delta_y))
+        for atom, delta_xy in zip(atomlist, delta):
+            atom.coord_x += delta_xy[0]
+            atom.coord_y += delta_xy[1]
+        iterator -= 1
