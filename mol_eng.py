@@ -6,6 +6,7 @@ Created on Mon Feb 21 15:52:19 2022
 """
 
 from math import sqrt, atan2, pi, sin, cos
+from random import uniform
 from typing import Optional, Sequence
 from enum import IntEnum, auto
 import elements as el
@@ -69,9 +70,7 @@ class CovBond:
         """Returns the length of the bond."""
         if len(self.atoms) < 2:
             return 0
-        xdiff: float = self.atoms[0].coord_x - self.atoms[1].coord_x
-        ydiff: float = self.atoms[0].coord_y - self.atoms[1].coord_y
-        return sqrt(xdiff**2 + ydiff**2)
+        return atomdist(self.atoms[0], self.atoms[1])
 
     def get_atoms(self):
         """Returns the atoms constituting this bond."""
@@ -267,12 +266,9 @@ class Atom:
         """Returns the list of the angles of bonds relative to the x axis."""
         angle_list: list[float] = []
         for bond in self._bonds:
-            xdiff: float = bond.other_atoms(self)[0].coord_x - self.coord_x
-            ydiff: float = bond.other_atoms(self)[0].coord_y - self.coord_y
-            angle: float = atan2(ydiff, xdiff)
-            if angle < 0:
-                angle = 2 * pi + angle
-            angle_list.append(angle)
+            angle_list.append(
+                atom_angle(self, bond.other_atoms(self)[0])
+            )
         return angle_list
 
     def get_electron_angles(self) -> list[float]:
@@ -586,10 +582,30 @@ def find_molecule(one_atom: Atom) -> tuple:
     return atomlist, bondlist
 
 
+def atomdist(one_atom: Atom, other_atom: Atom) -> float:
+    """Calculates the distance between two atoms."""
+    return sqrt(
+        (one_atom.coord_x - other_atom.coord_x) ** 2 +
+        (one_atom.coord_y - other_atom.coord_y) ** 2
+    )
+
+
+def atom_angle(one_atom: Atom, other_atom: Atom) -> float:
+    """Returns the angle of the vector pointung from one_atom to
+    other_atom, with the angle being between 0 and 2*pi."""
+    xdiff: float = other_atom.coord_x - one_atom.coord_x
+    ydiff: float = other_atom.coord_y - one_atom.coord_y
+    angle: float = atan2(ydiff, xdiff)
+    if angle < 0:
+        angle = 2 * pi + angle
+    return angle
+
+
 def optimize_2D(
     one_atom: Atom,
     iterator: int = 100,
     target_len: float = 30,
+    min_dist: float = 20,
     alpha: float = 0.1,
 ) -> None:
     """Finds the molecule that contains the atom, then optimzies the 2D
@@ -608,6 +624,15 @@ def optimize_2D(
                 delta_len = (bond.length - target_len) * alpha
                 delta_x += delta_len * cos(angle)
                 delta_y += delta_len * sin(angle)
+            for other_atom in atomlist:
+                if other_atom == atom or atom.is_bonded(other_atom):
+                    continue
+                if atomdist(atom, other_atom) < min_dist:
+                    delta_len = min_dist - atomdist(atom, other_atom)
+                    delta_x += (delta_len ** 2 * alpha) * cos(atom_angle(atom, other_atom))
+                    delta_y += (delta_len ** 2 * alpha) * sin(atom_angle(atom, other_atom))
+                    delta_x += uniform(-min_dist * alpha, min_dist * alpha)
+                    delta_y += uniform(-min_dist * alpha, min_dist * alpha)
             delta.append((delta_x, delta_y))
         for atom, delta_xy in zip(atomlist, delta):
             atom.coord_x += delta_xy[0]
