@@ -614,6 +614,7 @@ def optimize_2D(
     atomlist, _ = find_molecule(one_atom)
     delta: list[tuple[float, float]]
     delta_len: float
+    delta_angle: float
     delta_x: float
     delta_y: float
     while iterator > 0:
@@ -624,6 +625,13 @@ def optimize_2D(
                 delta_len = (bond.length - target_len) * alpha
                 delta_x += delta_len * cos(angle)
                 delta_y += delta_len * sin(angle)
+                delta_angle = sin(angle * 6 - pi) / 5 * alpha
+                if cos(pi-angle * 6) > 0:
+                    delta_angle *= -1
+                rel_x = atom.coord_x - bond.other_atoms(atom)[0].coord_x
+                rel_y = atom.coord_y - bond.other_atoms(atom)[0].coord_y
+                delta_x += rel_x * cos(delta_angle) - rel_y * sin(delta_angle) - rel_x
+                delta_y += rel_x * sin(delta_angle) + rel_y * cos(delta_angle) - rel_y
             for other_atom in atomlist:
                 if other_atom == atom or atom.is_bonded(other_atom):
                     continue
