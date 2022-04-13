@@ -292,6 +292,7 @@ class AppContainer(tk.Tk):
         self.mol_canvas.grid(row=1, column=0, sticky="nsew")
         self.mol_canvas.bind("<Button-1>", self.leftclick_canvas)
         self.bind("<Delete>", self.delkey_pressed)
+        self.bind("<F5>", self.optimize_2D)
         self.bind("<<RedrawAll>>", lambda x: self.redraw_all())
         self.bind("<<ModeButtonPress>>", self.button_pressed_mode)
         self.bind("<<AtomButtonPress>>", self.button_pressed_atom)
@@ -399,6 +400,17 @@ class AppContainer(tk.Tk):
                     self.bonds.remove(sel_item)
             self.selected = []
             self.redraw_all()
+    
+    def optimize_2D(self, event: tk.Event) -> None:
+        if len(self.selected) == 0:
+            return
+        for sel_num in self.selected:
+            if sel_num not in self.graphics:
+                continue
+            sel_item = self.graphics[sel_num]
+            if isinstance(sel_item, eng.Atom):
+                eng.optimize_2D(sel_item, target_len=DEFLEN)
+        self.redraw_all()
 
     def leftclick_canvas(self, event: tk.Event) -> None:
         """Handes left click on the canvas:
@@ -411,8 +423,11 @@ class AppContainer(tk.Tk):
             self.select_nothing()
             return
         if self.toolbar.is_add:
-            closestitems: tuple[int, ...] = self.mol_canvas.find_closest(
-                event.x, event.y
+            closestitems: tuple[int, ...] = self.mol_canvas.find_overlapping(
+                event.x - MINDIST / 2,
+                event.y - MINDIST / 2,
+                event.x + MINDIST / 2,
+                event.y + MINDIST / 2,
             )
             if len(closestitems) == 0:
                 item = None
