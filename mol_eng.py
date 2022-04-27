@@ -714,6 +714,8 @@ def optimize_2D(
         optim_pattern += ["tilt"] * multiplier
     atomlist: list[Atom]
     atomlist, _ = find_molecule(one_atom)
+    original_x: float = sum([atom.coord_x for atom in atomlist])
+    original_y: float = sum([atom.coord_y for atom in atomlist])
     deltas_xs: list[float]
     deltas_ys: list[float]
     delta_len: float
@@ -753,7 +755,7 @@ def optimize_2D(
                 delta_rel_angles: list[float] = angle_deltas(
                     bond_angles, atom.radicals + atom.lone_pairs
                 )
-                delta_angles = [0] * len(delta_rel_angles)
+                delta_angles: list[float] = [0.] * len(delta_rel_angles)
                 for index, delta_angle in enumerate(delta_rel_angles):
                     delta_angles[index] -= delta_angle / 2
                     if index + 1 == len(delta_rel_angles):
@@ -793,6 +795,15 @@ def optimize_2D(
         for atom, delta_x, delta_y in zip(atomlist, deltas_xs, deltas_ys):
             atom.coord_x += delta_x
             atom.coord_y += delta_y
+    new_x: float = sum([atom.coord_x for atom in atomlist])
+    new_y: float = sum([atom.coord_y for atom in atomlist])
+    delta_x = (new_x - original_x) / len(atomlist)
+    delta_y = (new_y - original_y) / len(atomlist)
+    for atom in atomlist:
+        atom.coord_x -= delta_x
+        atom.coord_x = round(atom.coord_x)
+        atom.coord_y -= delta_y
+        atom.coord_y = round(atom.coord_y)
     #for atom_index, atom in enumerate(atomlist):
     #    print(f"atom {atom_index}")
     #    for bond, angle in zip(atom.bonds, atom.bond_angles):
