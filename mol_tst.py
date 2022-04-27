@@ -93,8 +93,8 @@ def optimize_tst():
 if __name__ == '__main__':
     #molecules, bonds = carbon_monoxide()
     #molecules, bonds = XH("B")
-    #molecules, bonds = SF6(4, "Xe", "F")
+    molecules, bonds = SF6(4, "Xe", "F")
     #molecules, bonds = methane()
     #molecules, bonds = test3()
     #description(molecules, [0])
-    optimize_tst()
+    #optimize_tst()
