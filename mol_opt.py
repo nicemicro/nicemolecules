@@ -153,11 +153,39 @@ def push_away_close(
         atom.coord_y += delta_y
 
 
-def optimize_relative_angles(atomlist: list[eng.Atom], alpha: float = 0.1) -> None:
+def move_connected_atom(
+    moved_atom: eng.Atom,
+    orig_atom: eng.Atom,
+    delta_x: float,
+    delta_y: float,
+) -> None:
+    """Moving atoms and all its connections (except for those that are connected
+    to the original atom) by some delta x and y."""
+    atoms_to_move: list[eng.Atom] = [moved_atom]
+    current_num: int = 0
+    current_atom: eng.Atom
+    while current_num < len(atoms_to_move):
+        current_atom = atoms_to_move[current_num]
+        for bonded_atom in current_atom.bonded_atoms:
+            if (
+                bonded_atom not in atoms_to_move and
+                bonded_atom != orig_atom and
+                bonded_atom not in orig_atom.bonded_atoms
+            ):
+                atoms_to_move.append(bonded_atom)
+        current_num += 1
+    for atom in atoms_to_move:
+        atom.coord_x += delta_x
+        atom.coord_y += delta_y
+
+
+def optimize_relative_angles(
+    atomlist: list[eng.Atom],
+    alpha: float = 0.1,
+) -> None:
     """Goes through the atoms and moves them towards a more favorable angle."""
-    deltas_xs: list[float] = [0] * len(atomlist)
-    deltas_ys: list[float] = [0] * len(atomlist)
     for atom in atomlist:
+        #print(f"  Atom optimized {atom.symbol} ({atom.coord_x}, {atom.coord_y})")
         bond_angles: list[float]
         bonds: list[eng.CovBond]
         bond_angles, bonds = bond_angle_instances(atom)
@@ -183,15 +211,12 @@ def optimize_relative_angles(atomlist: list[eng.Atom], alpha: float = 0.1) -> No
             #print(f"      relative position: ({rel_x}, {rel_y})")
             #print(f"         delta_x: {rel_x * cos(delta_angle) - rel_y * sin(delta_angle) - rel_x}")
             #print(f"         delta_y: {rel_x * sin(delta_angle) + rel_y * cos(delta_angle) - rel_y}")
-            deltas_xs[other_index] += (
-                rel_x * cos(delta_angle) - rel_y * sin(delta_angle) - rel_x
+            move_connected_atom(
+                bond.other_atoms(atom)[0],
+                atom,
+                rel_x * cos(delta_angle) - rel_y * sin(delta_angle) - rel_x,
+                rel_x * sin(delta_angle) + rel_y * cos(delta_angle) - rel_y,
             )
-            deltas_ys[other_index] += (
-                rel_x * sin(delta_angle) + rel_y * cos(delta_angle) - rel_y
-            )
-    for atom, delta_x, delta_y in zip(atomlist, deltas_xs, deltas_ys):
-        atom.coord_x += delta_x
-        atom.coord_y += delta_y
 
 
 def optimize_tilt(atomlist: list[eng.Atom], alpha: float = 0.1) -> None:
@@ -206,15 +231,12 @@ def optimize_tilt(atomlist: list[eng.Atom], alpha: float = 0.1) -> None:
                 delta_angle *= -1
             rel_x = atom.coord_x - bond.other_atoms(atom)[0].coord_x
             rel_y = atom.coord_y - bond.other_atoms(atom)[0].coord_y
-            deltas_xs[atom_index] += (
-                rel_x * cos(delta_angle) - rel_y * sin(delta_angle) - rel_x
+            move_connected_atom(
+                bond.other_atoms(atom)[0],
+                atom,
+                rel_x * cos(delta_angle) - rel_y * sin(delta_angle) - rel_x,
+                rel_x * sin(delta_angle) + rel_y * cos(delta_angle) - rel_y,
             )
-            deltas_ys[atom_index] += (
-                rel_x * sin(delta_angle) + rel_y * cos(delta_angle) - rel_y
-            )
-    for atom, delta_x, delta_y in zip(atomlist, deltas_xs, deltas_ys):
-        atom.coord_x += delta_x
-        atom.coord_y += delta_y
 
 
 def optimize_2D(
@@ -229,7 +251,7 @@ def optimize_2D(
     formula."""
     #print("--- Optimization Starts ---")
     if segments is None:
-        segments = [1, 3, 10, 100, 10, 1]
+        segments = [1, 3, 10, 3, 1]
         #segments = [1]
     assert isinstance(segments, list)
     iter_pattern: list[int] = segments * iterator
