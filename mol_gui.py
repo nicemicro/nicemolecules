@@ -7,6 +7,7 @@ Created on Fri Feb 25 07:27:35 2022
 """
 import mol_eng as eng
 import mol_tst as tst
+import mol_opt as opt
 import tkinter as tk
 from tkinter import ttk
 from tkinter import font as tkfont
@@ -409,7 +410,7 @@ class AppContainer(tk.Tk):
                 continue
             sel_item = self.graphics[sel_num]
             if isinstance(sel_item, eng.Atom):
-                eng.optimize_2D(sel_item, target_len=DEFLEN)
+                opt.optimize_2D(sel_item, target_len=DEFLEN)
         self.redraw_all()
 
     def leftclick_canvas(self, event: tk.Event) -> None:
