@@ -4,10 +4,11 @@ Created on Mon Feb 21 15:52:19 2022
 
 @author: nicemicro
 """
-from math import pi, sin, cos
-from typing import Optional
-import mol_eng as eng
+from math import cos, pi, sin
 from random import uniform
+from typing import Optional
+
+import mol_eng as eng
 
 IDEAL_REL_ANGLES: list[list[float]] = [
     [0.0],
@@ -222,9 +223,7 @@ def optimize_relative_angles(
 def optimize_tilt(atomlist: list[eng.Atom], alpha: float = 0.1) -> None:
     """Goes thrugh every atom, and moves them in the direction of an
     absolute angle on the screen that is a multiple of 30 degrees."""
-    deltas_xs: list[float] = [0] * len(atomlist)
-    deltas_ys: list[float] = [0] * len(atomlist)
-    for atom_index, atom in enumerate(atomlist):
+    for atom in atomlist:
         for bond, angle in zip(atom.bonds, atom.bond_angles):
             delta_angle = sin(angle * 6 - pi) / 10 * alpha
             if cos(pi - angle * 6) > 0:
@@ -239,10 +238,68 @@ def optimize_tilt(atomlist: list[eng.Atom], alpha: float = 0.1) -> None:
             )
 
 
+def rotate_to_fit(atomlist: list[eng.Atom]) -> None:
+    """Rotates the molecule around the selected atom to match predefined
+    angles on the plane such as horizontal or vertical or 30° off."""
+    central: eng.Atom = atomlist[0]
+    angles: list[float] = central.bond_angles
+    ref_angles: list[float] = [0., pi / 2, pi, 3 * pi / 2]
+    best_diff: int = -1
+    best_rotation: float = 0.
+    sum_diff: int = 0
+    rotate_ang: float = 0.
+    delta: float = 0.
+    min_delta: float = -1.
+    #print(f"Bond angles: {[int(bond / pi * 180) for bond in angles]}")
+    for ref_angle in ref_angles:
+        #print(f"  ref. angle: {int(ref_angle * 180 / pi)}")
+        min_delta = -1
+        rotate_ang = 0.
+        for angle in angles:
+            delta = ref_angle - angle
+            while delta > pi:
+                delta -= 2 * pi
+            while delta < -pi:
+                delta += 2 * pi
+            delta = delta ** 2
+            #print(f"    real. angle: {int(angle * 180 / pi)}, delta = {delta}")
+            if delta < min_delta or min_delta < 0:
+                min_delta = delta
+                rotate_ang = ref_angle - angle
+                while rotate_ang > pi:
+                    rotate_ang -= 2 * pi
+                while rotate_ang < -pi:
+                    rotate_ang += 2 * pi
+                #print(f"      new minimum delta: {min_delta}")
+                #print(f"      new rotation angle: {int(rotate_ang * 180 / pi)}")
+        sum_diff = 0
+        for angle in angles:
+            if (
+                (int(round((angle + rotate_ang) / pi * 180)) % 30) > 4 and
+                30 - (int(round((angle + rotate_ang) / pi * 180)) % 30) > 4
+            ):
+                sum_diff += 1
+        #print(f"  differences with best rotation: {sum_diff}")
+        if  (
+            best_diff < 0 or
+            sum_diff < best_diff or
+            (sum_diff == best_diff and rotate_ang ** 2 < best_rotation ** 2)
+        ):
+            best_diff = sum_diff
+            best_rotation = rotate_ang
+            #print(f"    smallest diff: {best_diff}, rotate with: {int(best_rotation* 180 / pi)}")
+    center_x: float = central.coord_x
+    center_y: float = central.coord_y
+    for atom in atomlist:
+        rel_x = atom.coord_x - center_x
+        rel_y = atom.coord_y - center_y
+        atom.coord_x += rel_x * cos(best_rotation) - rel_y * sin(best_rotation) - rel_x
+        atom.coord_y += rel_x * sin(best_rotation) + rel_y * cos(best_rotation) - rel_y
+
+
 def optimize_2D(
     one_atom: eng.Atom,
-    iterator: int = 3,
-    segments: Optional[list[int]] = None,
+    iterations: int = 80,
     target_len: float = 30.,
     min_dist: float = 20.,
     alpha: float = 0.1,
@@ -250,28 +307,18 @@ def optimize_2D(
     """Finds the molecule that contains the atom, then optimzies the 2D
     formula."""
     #print("--- Optimization Starts ---")
-    if segments is None:
-        segments = [1, 3, 10, 3, 1]
-        #segments = [1]
-    assert isinstance(segments, list)
-    iter_pattern: list[int] = segments * iterator
-    optim_pattern: list[str] = []
-    for multiplier in iter_pattern:
-        optim_pattern += ["len"] * multiplier
-        optim_pattern += ["angles"] * multiplier
-        optim_pattern += ["tilt"] * multiplier
     atomlist: list[eng.Atom]
     atomlist, _ = eng.find_molecule(one_atom)
     original_x: float = sum([atom.coord_x for atom in atomlist])
     original_y: float = sum([atom.coord_y for atom in atomlist])
-    for optimizer in optim_pattern:
-        if optimizer == "len":
-            optimize_dist(atomlist, target_len, alpha)
-        elif optimizer == "angles":
-            optimize_relative_angles(atomlist, alpha)
-        elif optimizer == "tilt":
-            optimize_tilt(atomlist, alpha)
+    for atom in atomlist:
+        atom.coord_x += uniform(-1, 1)
+        atom.coord_y += uniform(-1, 1)
+    for _ in range(iterations):
+        optimize_dist(atomlist, target_len, alpha)
+        optimize_relative_angles(atomlist, alpha)
         push_away_close(atomlist, min_dist, alpha)
+    rotate_to_fit(atomlist)
     new_x: float = sum([atom.coord_x for atom in atomlist])
     new_y: float = sum([atom.coord_y for atom in atomlist])
     delta_x = (new_x - original_x) / len(atomlist)
