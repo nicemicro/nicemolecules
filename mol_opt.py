@@ -319,6 +319,23 @@ def optimize_2D(
         optimize_relative_angles(atomlist, alpha)
         push_away_close(atomlist, min_dist, alpha)
     rotate_to_fit(atomlist)
+    atomlist.reverse()
+    for atom in atomlist:
+        for bonded_atom in atom.bonded_atoms:
+            if -3 < abs(bonded_atom.coord_x - atom.coord_x) < 3:
+                move_connected_atom(
+                    bonded_atom,
+                    atom,
+                    atom.coord_x - bonded_atom.coord_x,
+                    0
+                )
+            if -3 < abs(bonded_atom.coord_y - atom.coord_y) < 3:
+                move_connected_atom(
+                    bonded_atom,
+                    atom,
+                    0,
+                    atom.coord_y - bonded_atom.coord_y
+                )
     new_x: float = sum([atom.coord_x for atom in atomlist])
     new_y: float = sum([atom.coord_y for atom in atomlist])
     delta_x = (new_x - original_x) / len(atomlist)
