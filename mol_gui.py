@@ -202,6 +202,12 @@ class TopToolbar(ttk.Frame):
         ttk.Button(bond_sel, text="⟵", command=lambda: self.set_bond([None, -1])).grid(
             row=1, column=2, columnspan=1
         )
+        ttk.Button(bond_sel, text="(-)", command=self.minus_charge).grid(
+            row=2, column=0, columnspan=1
+        )
+        ttk.Button(bond_sel, text="(+)", command=self.plus_charge).grid(
+            row=2, column=1, columnspan=1
+        )
 
     def draw_mode_change(self, _nothing: Optional[Any] = None) -> None:
         self.event_generate("<<RedrawAll>>", when="tail")
@@ -245,6 +251,12 @@ class TopToolbar(ttk.Frame):
                 self._bond[index] = item
                 self.event_generate(f"<<BondButton{index}Press>>", when="tail")
         self.status_text_update()
+    
+    def plus_charge(self) -> None:
+        self.event_generate("<<PlusChargeButtonPress>>", when="tail")
+
+    def minus_charge(self) -> None:
+        self.event_generate("<<MinusChargeButtonPress>>", when="tail")
 
 
 class AppContainer(tk.Tk):
@@ -299,6 +311,8 @@ class AppContainer(tk.Tk):
         self.bind("<<AtomButtonPress>>", self.button_pressed_atom)
         self.bind("<<BondButton0Press>>", self.button_pressed_order)
         self.bind("<<BondButton1Press>>", self.button_pressed_dativity)
+        self.bind("<<PlusChargeButtonPress>>", lambda x: self.charge_button_pressed(1))
+        self.bind("<<MinusChargeButtonPress>>", lambda x: self.charge_button_pressed(-1))
 
     def button_pressed_mode(self, _event: tk.Event) -> None:
         if not self.toolbar.is_select:
@@ -327,7 +341,7 @@ class AppContainer(tk.Tk):
                 self.selected = []
                 self.redraw_all()
 
-    def button_pressed_order(self, event: tk.Event) -> None:
+    def button_pressed_order(self, _event: tk.Event) -> None:
         """Handles the pressing of the bond symbol buttons in the toolbar:
         - in normal mode, if bonds are selected, the order of those bonds
           is changed with regard to the toolbar setting."""
@@ -347,7 +361,7 @@ class AppContainer(tk.Tk):
                 self.selected = []
                 self.redraw_all()
 
-    def button_pressed_dativity(self, event: tk.Event) -> None:
+    def button_pressed_dativity(self, _event: tk.Event) -> None:
         """Handles the pressing of the bond symbol buttons in the toolbar:
         - in normal mode, if bonds are selected, the dativity of those
           bonds is changed with regard to the toolbar setting."""
@@ -367,7 +381,7 @@ class AppContainer(tk.Tk):
                 self.selected = []
                 self.redraw_all()
 
-    def delkey_pressed(self, event: tk.Event) -> None:
+    def delkey_pressed(self, _event: tk.Event) -> None:
         """Handles the event of the delete key being pressed:
         - in normal mode, if there are elements selected, the selected
           bonds removed, or atoms and bonds of atoms removed."""
@@ -401,8 +415,28 @@ class AppContainer(tk.Tk):
                     self.bonds.remove(sel_item)
             self.selected = []
             self.redraw_all()
-    
-    def optimize_2D(self, event: tk.Event) -> None:
+
+    def charge_button_pressed(self, charge_change: int) -> None:
+        """The charge change button has been pressed."""
+        if self.mode == self.Modes.NORMAL:
+            changes: list[int] = []
+            change_to: int = 0
+            for sel_num in self.selected:
+                if sel_num not in self.graphics:
+                    continue
+                sel_item = self.graphics[sel_num]
+                if isinstance(sel_item, eng.Atom):
+                    if self.atoms.index(sel_item) in changes:
+                        continue
+                    change_to = sel_item.charge + charge_change
+                    err: eng.BondingError = sel_item.can_ionize()
+                    if err == eng.BondingError.OK:
+                        sel_item.charge = change_to
+                        changes.append(self.atoms.index(sel_item))
+        self.redraw_all()
+
+    def optimize_2D(self, _event: tk.Event) -> None:
+        """Optimize the structural formula based on simple rules."""
         if len(self.selected) == 0:
             return
         for sel_num in self.selected:
@@ -992,17 +1026,18 @@ class AppContainer(tk.Tk):
                         f"atom-{atom_id}",
                         "atom_text",
                         f"atom_text-{atom_id}",
+                        f"atom_core-{atom_id}",
                     ),
                 )
             )
-            if atom.empty_valence == 1:
+            if atom.radicals == 1:
                 return atom_s
             (_, bby1, bbx2, bby2) = self.mol_canvas.bbox(f"atom-{atom_id}")
             atom_s.append(
                 self.mol_canvas.create_text(
                     bbx2 + 2,
                     (bby1 + bby2 * 3) / 4,
-                    text=f"{atom.empty_valence}",
+                    text=f"{atom.radicals}",
                     justify="left",
                     font=self.symbol_index_font,
                     tags=(
@@ -1026,6 +1061,7 @@ class AppContainer(tk.Tk):
                     f"atom-{atom_id}",
                     "atom_text",
                     f"atom_text-{atom_id}",
+                    f"atom_core-{atom_id}",
                 ),
             )
         )
@@ -1042,17 +1078,18 @@ class AppContainer(tk.Tk):
                         f"atom-{atom_id}",
                         "atom_text",
                         f"atom_text-{atom_id}",
+                        f"atom_core-{atom_id}",
                     ),
                 )
             )
-            if atom.empty_valence == 1:
+            if atom.radicals == 1:
                 return atom_s
             (bbx1, bby1, bbx2, bby2) = self.mol_canvas.bbox(f"atom-{atom_id}")
             atom_s.append(
                 self.mol_canvas.create_text(
                     bbx2 + 2,
                     (bby1 + bby2 * 3) / 4,
-                    text=f"{atom.empty_valence}",
+                    text=f"{atom.radicals}",
                     justify="left",
                     font=self.symbol_index_font,
                     tags=(
@@ -1066,12 +1103,12 @@ class AppContainer(tk.Tk):
             return atom_s
         if not right:
             assert False, "Unreachable"
-        if atom.empty_valence > 1:
+        if atom.radicals > 1:
             atom_s.append(
                 self.mol_canvas.create_text(
                     bbx1 - 2,
                     (bby1 + bby2 * 3) / 4,
-                    text=f"{atom.empty_valence}",
+                    text=f"{atom.radicals}",
                     justify="right",
                     font=self.symbol_index_font,
                     tags=(
@@ -1094,10 +1131,44 @@ class AppContainer(tk.Tk):
                     f"atom-{atom_id}",
                     "atom_text",
                     f"atom_text-{atom_id}",
+                    f"atom_core-{atom_id}",
                 ),
             )
         )
         return atom_s
+
+    def draw_atom_charge(
+        self,
+        coord_x: float,
+        coord_y: float,
+        charge: int,
+        atom_id: int
+    ) -> int:
+        """Draws the charge symbol next to an atom."""
+        charge_text: str
+        if charge == 0:
+            charge_text = "0"
+        elif charge == -1:
+            charge_text = "−"
+        elif charge == 1:
+            charge_text = "+"
+        elif charge > 1:
+            charge_text = f"{charge}+"
+        elif charge < 1:
+            charge_text = f"{-charge}−"
+        return self.mol_canvas.create_text(
+            coord_x,
+            coord_y,
+            text=charge_text,
+            font=self.symbol_index_font,
+            justify="left",
+            tags=(
+                f"atom-{atom_id}",
+                "atom_text",
+                f"atom_text-{atom_id}",
+                "index",
+            ),
+        )
 
     def draw_atom(self, atom: eng.Atom, atom_id: int) -> list[int]:
         """Draws the representation of the atom on the screen."""
@@ -1113,10 +1184,19 @@ class AppContainer(tk.Tk):
                     tags=("atom", f"atom-{atom_id}", "empty"),
                 )
             )
+            if atom.charge != 0:
+                atom_s.append(
+                    self.draw_atom_charge(
+                        atom.coord_x + 10,
+                        atom.coord_y - 10,
+                        atom.charge,
+                        atom_id
+                    )
+                )
             return atom_s
         if (
             self.toolbar.empty_val_style == self.toolbar.EmptyValence.HYDROGENS
-            and atom.empty_valence > 0
+            and atom.radicals > 0
         ):
             atom_s += self.draw_atom_with_H(atom, atom_id)
         else:
@@ -1132,11 +1212,22 @@ class AppContainer(tk.Tk):
                         f"atom-{atom_id}",
                         "atom_text",
                         f"atom_text-{atom_id}",
+                        f"atom_core-{atom_id}",
                     ),
                 )
             )
             if self.toolbar.empty_val_style == self.toolbar.EmptyValence.ELECTRONS:
                 atom_s += self.draw_atom_electrons(atom, atom_id)
+        if atom.charge != 0:
+            (_, bby1, bbx2, bby2) = self.mol_canvas.bbox(f"atom_core-{atom_id}")
+            atom_s.append(
+                self.draw_atom_charge(
+                    bbx2 + 2,
+                    (5 * bby1 - bby2) / 4,
+                    atom.charge,
+                    atom_id
+                )
+            )
         return atom_s
 
     def redraw_all(self) -> None:
