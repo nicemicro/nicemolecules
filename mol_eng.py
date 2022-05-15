@@ -499,6 +499,44 @@ class Atom:
         return bonds_loop
 
 
+class UnrestrictedAtom(Atom):
+    """An atom that has no restrictions on bonding or ionization."""
+    def get_nonbonding_el(self) -> int:
+        return 0
+
+    def get_empty_valence(self) -> int:
+        return 0
+
+    def get_radicals(self) -> int:
+        return 0
+
+    def get_lone_pairs(self) -> int:
+        return 0
+
+    def __init__(self, symbol: str, coords: Sequence[float], charge: int = 0) -> None:
+        element = el.CustomElement(symbol)
+        super().__init__(element, coords, charge)
+
+    def can_ionize(self, charge: int) -> BondingError:
+        return BondingError.OK
+
+    def can_bond(
+        self, other_atom, order: int = 1, dative: int = 0, check_other: bool = True
+    ) -> BondingError:
+        assert isinstance(other_atom, Atom), "Only can bond to an Atom instance"
+        other_err = BondingError.OK
+        if check_other:
+            other_err = other_atom.can_bond(self, order, -dative, False)
+        # If there is any error from other atoms, we report that error directly
+        if other_err != BondingError.OK:
+            return other_err
+        if other_atom == self:
+            return BondingError.BOND_SELF
+        if self.is_bonded(other_atom):
+            return BondingError.BOND_EXISTS
+        return BondingError.OK
+
+
 def element_by_symbol(symbol: str) -> Optional[el.Element]:
     """Returns the corresponding element instance to the element symbol."""
     element_dict = {element.symbol: element for element in el.element_table}

@@ -45,6 +45,17 @@ class Element:
     fullshell = property(get_fullshell, set_attr, del_attr)
     hypervalent = property(get_hypervalent, set_attr, del_attr)
 
+
+class CustomElement(Element):
+    _valence_el = 0
+    _fullshell = 0
+    _hypervalent = True
+
+    def __init__(self, symbol: str):
+        self._symbol = symbol
+        super().__init__()
+
+
 class Hydrogen(Element):
     _symbol = "H"
     _valence_el = 1
