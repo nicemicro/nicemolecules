@@ -397,7 +397,7 @@ class Atom:
             raise RuntimeError(f"Bonding to atom failed. Error: {err}")
         self._element = new_element
 
-    def can_ionize(self, charge: int = 0) -> BondingError:
+    def can_ionize(self, charge: int) -> BondingError:
         """Checks whether the charge of the atom can be changed to the
         specified value."""
         if self._element.valence_el - charge < 0:

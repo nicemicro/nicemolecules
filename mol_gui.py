@@ -429,7 +429,7 @@ class AppContainer(tk.Tk):
                     if self.atoms.index(sel_item) in changes:
                         continue
                     change_to = sel_item.charge + charge_change
-                    err: eng.BondingError = sel_item.can_ionize()
+                    err: eng.BondingError = sel_item.can_ionize(change_to)
                     if err == eng.BondingError.OK:
                         sel_item.charge = change_to
                         changes.append(self.atoms.index(sel_item))
