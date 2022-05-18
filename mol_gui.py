@@ -108,11 +108,14 @@ class TopToolbar(ttk.Frame):
 
     def __init__(self, parent: ttk.Frame, controller: tk.Tk) -> None:
         ttk.Frame.__init__(self, parent)
+        #s = ttk.Style()
+        #s.configure("test.TFrame", background="red")
         self.controller: tk.Tk = controller
         self._mode: int = self.Modes.ADD_ATOM
         self._symbol: str = "C"
         self._bond: list[int] = [1, 0]
         self.status_text = tk.StringVar()
+        self.custom_atom_symbol = tk.StringVar()
         atom_symbols: list[list[str]] = [
             ["H", "C", "N", "O", "F", ""],
             ["", "", "P", "S", "Cl"],
@@ -135,6 +138,8 @@ class TopToolbar(ttk.Frame):
         ttk.Label(self, textvariable=self.status_text).grid(
             row=1, column=2, rowspan=1, sticky="nesw"
         )
+        custom_add = ttk.Frame(self, padding="0 0 0 5")
+        custom_add.grid(row=2, column=0, columnspan=2, sticky="nsew")
         self.status_text_update()
 
         ttk.Button(
@@ -184,6 +189,12 @@ class TopToolbar(ttk.Frame):
                     width=3,
                     command=lambda symbol=symbol: self.set_symbol(symbol),
                 ).grid(row=row, column=index, columnspan=1)
+        ttk.Entry(custom_add, textvariable=self.custom_atom_symbol).grid(row=0, column=0, sticky="nsew")
+        ttk.Button(
+            custom_add,
+            text="Set",
+            command=self.set_custom_symbol
+        ).grid(row=0, column=1, sticky="nsew")
 
         ttk.Button(bond_sel, text="--", width=4, command=lambda: self.set_bond([1, None])).grid(
             row=0, column=0, columnspan=1
@@ -244,6 +255,13 @@ class TopToolbar(ttk.Frame):
         self.event_generate("<<AtomButtonPress>>", when="tail")
         self._symbol = new_symbol
         self.status_text_update()
+
+    def set_custom_symbol(self) -> None:
+        """Sets the default atom symbol to a custom one for the application"""
+        new_symbol: str = self.custom_atom_symbol.get()
+        if new_symbol == "":
+            return
+        self.set_symbol(new_symbol)
 
     def set_bond(self, bondtype: list[Optional[int]]) -> None:
         """Sets the bond type: [order, dativity]"""
@@ -312,8 +330,8 @@ class AppContainer(tk.Tk):
         self.bind("<<AtomButtonPress>>", self.button_pressed_atom)
         self.bind("<<BondButton0Press>>", self.button_pressed_order)
         self.bind("<<BondButton1Press>>", self.button_pressed_dativity)
-        self.bind("<<PlusChargeButtonPress>>", lambda x: self.charge_button_pressed(1))
-        self.bind("<<MinusChargeButtonPress>>", lambda x: self.charge_button_pressed(-1))
+        self.bind("<<PlusChargeButtonPress>>", lambda x: self.button_pressed_charge(1))
+        self.bind("<<MinusChargeButtonPress>>", lambda x: self.button_pressed_charge(-1))
 
     def button_pressed_mode(self, _event: tk.Event) -> None:
         if not self.toolbar.is_select:
@@ -417,7 +435,7 @@ class AppContainer(tk.Tk):
             self.selected = []
             self.redraw_all()
 
-    def charge_button_pressed(self, charge_change: int) -> None:
+    def button_pressed_charge(self, charge_change: int) -> None:
         """The charge change button has been pressed."""
         if self.mode == self.Modes.NORMAL:
             changes: list[int] = []
@@ -505,6 +523,9 @@ class AppContainer(tk.Tk):
         if self.toolbar.is_add:
             self.event_listened = True
             test_atom = eng.add_atom_by_symbol(self.toolbar.atom_symbol, [0, 0])
+            if test_atom is None:
+                test_atom = eng.UnrestrictedAtom(self.toolbar.atom_symbol, [0, 0])
+            assert test_atom is not None, "Test atom could not be created."
             if (
                 sel_atom.can_bond(
                     test_atom, self.toolbar.bond_order, self.toolbar.bond_dativity
@@ -769,7 +790,9 @@ class AppContainer(tk.Tk):
         """Adds an atom to the canvas with given symbol at
         given coordinates."""
         new_atom = eng.add_atom_by_symbol(atom_symbol, coords)
-        assert new_atom is not None, "Unknown symbol probably"
+        if new_atom is None:
+            new_atom = eng.UnrestrictedAtom(atom_symbol, coords)
+        assert new_atom is not None, "Unsuccessful at creating a new atom."
         self.atoms.append(new_atom)
         self.redraw_all()
         return new_atom
