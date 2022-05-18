@@ -125,15 +125,15 @@ class TopToolbar(ttk.Frame):
         }
 
         mode_row = ttk.Frame(self, padding="0 0 0 5")
-        mode_row.grid(row=0, column=0, sticky="nsew")
+        mode_row.grid(row=0, column=0, columnspan=1, sticky="nsew")
         mol_style = ttk.Frame(self, padding="10 0 0 5")
         mol_style.grid(row=0, column=1, columnspan=2, sticky="nse")
         symbol_sel = ttk.Frame(self, padding="0 0 0 5")
-        symbol_sel.grid(row=1, column=0, columnspan=2, sticky="nsw")
+        symbol_sel.grid(row=1, column=0, columnspan=1, sticky="nsw")
         bond_sel = ttk.Frame(self, padding="10 0 0 5")
-        bond_sel.grid(row=1, column=2, sticky="nse")
+        bond_sel.grid(row=1, column=1, sticky="nsw")
         ttk.Label(self, textvariable=self.status_text).grid(
-            row=0, column=3, rowspan=2, sticky="nesw"
+            row=1, column=2, rowspan=1, sticky="nesw"
         )
         self.status_text_update()
 
@@ -181,31 +181,32 @@ class TopToolbar(ttk.Frame):
                 ttk.Button(
                     symbol_sel,
                     text=symbol,
+                    width=3,
                     command=lambda symbol=symbol: self.set_symbol(symbol),
                 ).grid(row=row, column=index, columnspan=1)
 
-        ttk.Button(bond_sel, text="--", command=lambda: self.set_bond([1, None])).grid(
+        ttk.Button(bond_sel, text="--", width=4, command=lambda: self.set_bond([1, None])).grid(
             row=0, column=0, columnspan=1
         )
-        ttk.Button(bond_sel, text="==", command=lambda: self.set_bond([2, None])).grid(
+        ttk.Button(bond_sel, text="==", width=4, command=lambda: self.set_bond([2, None])).grid(
             row=0, column=1, columnspan=1
         )
-        ttk.Button(bond_sel, text="≡≡", command=lambda: self.set_bond([3, None])).grid(
+        ttk.Button(bond_sel, text="≡≡", width=4, command=lambda: self.set_bond([3, None])).grid(
             row=0, column=2, columnspan=1
         )
-        ttk.Button(bond_sel, text="↮", command=lambda: self.set_bond([None, 0])).grid(
+        ttk.Button(bond_sel, text="↮", width=4, command=lambda: self.set_bond([None, 0])).grid(
             row=1, column=0, columnspan=1
         )
-        ttk.Button(bond_sel, text="⟶", command=lambda: self.set_bond([None, 1])).grid(
+        ttk.Button(bond_sel, text="⟶", width=4, command=lambda: self.set_bond([None, 1])).grid(
             row=1, column=1, columnspan=1
         )
-        ttk.Button(bond_sel, text="⟵", command=lambda: self.set_bond([None, -1])).grid(
+        ttk.Button(bond_sel, text="⟵", width=4, command=lambda: self.set_bond([None, -1])).grid(
             row=1, column=2, columnspan=1
         )
-        ttk.Button(bond_sel, text="(-)", command=self.minus_charge).grid(
+        ttk.Button(bond_sel, text="(-)", width=4, command=self.minus_charge).grid(
             row=2, column=0, columnspan=1
         )
-        ttk.Button(bond_sel, text="(+)", command=self.plus_charge).grid(
+        ttk.Button(bond_sel, text="(+)", width=4, command=self.plus_charge).grid(
             row=2, column=1, columnspan=1
         )
 
