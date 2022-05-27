@@ -495,7 +495,7 @@ class AppContainer(tk.Tk):
                     and -MINDIST < item_obj.coord_y - event.y < MINDIST
                 ):
                     return
-            coords: list[int] = [event.x, event.y]
+            coords = (event.x, event.y)
             self.add_atom(self.toolbar.atom_symbol, coords)
 
     def leftdown_atom(self, atom_id: int, _event: tk.Event) -> None:
@@ -522,9 +522,9 @@ class AppContainer(tk.Tk):
             return
         if self.toolbar.is_add:
             self.event_listened = True
-            test_atom = eng.add_atom_by_symbol(self.toolbar.atom_symbol, [0, 0])
+            test_atom = eng.add_atom_by_symbol(self.toolbar.atom_symbol, (0, 0))
             if test_atom is None:
-                test_atom = eng.UnrestrictedAtom(self.toolbar.atom_symbol, [0, 0])
+                test_atom = eng.UnrestrictedAtom(self.toolbar.atom_symbol, (0, 0))
             assert test_atom is not None, "Test atom could not be created."
             if (
                 sel_atom.can_bond(
@@ -556,7 +556,7 @@ class AppContainer(tk.Tk):
             new_x = int(self.mol_canvas.coords(atomplace)[0])
             new_y = int(self.mol_canvas.coords(atomplace)[1])
             atom_connect = self.atoms[atom_id]
-            new_atom = self.add_atom(self.toolbar.atom_symbol, [new_x, new_y])
+            new_atom = self.add_atom(self.toolbar.atom_symbol, (new_x, new_y))
             new_bond = atom_connect.bond(
                 new_atom,
                 order=self.toolbar.bond_order,
@@ -786,7 +786,7 @@ class AppContainer(tk.Tk):
             )
             num += 1
 
-    def add_atom(self, atom_symbol: str, coords: Sequence[float]) -> eng.Atom:
+    def add_atom(self, atom_symbol: str, coords: tuple[float, float]) -> eng.Atom:
         """Adds an atom to the canvas with given symbol at
         given coordinates."""
         new_atom = eng.add_atom_by_symbol(atom_symbol, coords)

@@ -201,6 +201,12 @@ class Atom:
     Represents an atom symbol in 2D-space in a structural formula.
     """
 
+    def get_coords(self) -> tuple[float, float]:
+        return (self.coord_x, self.coord_y)
+
+    def set_coords(self, new_coords: tuple[float, float]) -> None:
+        (self.coord_x, self.coord_y) = new_coords
+
     def get_symbol(self) -> str:
         return self._element.symbol
 
@@ -321,6 +327,8 @@ class Atom:
     _bonds: list[CovBond]
     coord_x: float
     coord_y: float
+    coord_z: int
+    coords = property(get_coords, set_coords)
     symbol = property(get_symbol, toss)
     valence = property(get_valence, toss)
     fullshell = property(get_fullshell, toss)
@@ -336,12 +344,19 @@ class Atom:
     bond_angles = property(get_bond_angles, toss)
     electron_angles = property(get_electron_angles, toss)
 
-    def __init__(self, element: el.Element, coords: Sequence[float], charge: int = 0):
+    def __init__(
+        self,
+        element: el.Element,
+        coords: tuple[float, float],
+        coord_z: int = 0,
+        charge: int = 0
+    ):
+        """Initialize the atom with the element, coordinates and charge."""
         self._element = element
         self.charge = charge
         self._bonds = []
-        self.coord_x = coords[0]
-        self.coord_y = coords[1]
+        (self.coord_x, self.coord_y) = coords
+        self.coord_z = coord_z
 
     def describe(self, short: bool = False) -> str:
         """Describes the properties of the atom in human-readable form"""
@@ -513,9 +528,15 @@ class UnrestrictedAtom(Atom):
     def get_lone_pairs(self) -> int:
         return 0
 
-    def __init__(self, symbol: str, coords: Sequence[float], charge: int = 0) -> None:
+    def __init__(
+        self,
+        symbol: str,
+        coords: tuple[float, float],
+        coord_z: int = 0,
+        charge: int = 0
+    ) -> None:
         element = el.CustomElement(symbol)
-        super().__init__(element, coords, charge)
+        super().__init__(element, coords, coord_z=coord_z, charge=charge)
 
     def can_ionize(self, charge: int) -> BondingError:
         return BondingError.OK
@@ -545,7 +566,7 @@ def element_by_symbol(symbol: str) -> Optional[el.Element]:
     return element_dict[symbol]
 
 
-def add_atom_by_symbol(symbol: str, coords: Sequence[float]) -> Optional[Atom]:
+def add_atom_by_symbol(symbol: str, coords: tuple[float, float]) -> Optional[Atom]:
     """Returns a new atom instance specified by its symbol and coordinates."""
     sel_el: Optional[el.Element] = element_by_symbol(symbol)
     if sel_el is None:
