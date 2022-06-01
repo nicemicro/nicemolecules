@@ -134,12 +134,12 @@ class TopToolbar(ttk.Frame):
         symbol_sel = ttk.Frame(self, padding="0 0 0 5")
         symbol_sel.grid(row=1, column=0, columnspan=1, sticky="nsw")
         bond_sel = ttk.Frame(self, padding="10 0 0 5")
-        bond_sel.grid(row=1, column=1, sticky="nsw")
+        bond_sel.grid(row=1, column=1, rowspan=2, sticky="nsw")
         ttk.Label(self, textvariable=self.status_text).grid(
             row=1, column=2, rowspan=1, sticky="nesw"
         )
         custom_add = ttk.Frame(self, padding="0 0 0 5")
-        custom_add.grid(row=2, column=0, columnspan=2, sticky="nsew")
+        custom_add.grid(row=2, column=0, columnspan=1, sticky="nsew")
         self.status_text_update()
 
         ttk.Button(
@@ -220,6 +220,12 @@ class TopToolbar(ttk.Frame):
         ttk.Button(bond_sel, text="(+)", width=4, command=self.plus_charge).grid(
             row=2, column=1, columnspan=1
         )
+        ttk.Button(bond_sel, text="UP", width=4, command=self.move_above).grid(
+            row=3, column=0, columnspan=1
+        )
+        ttk.Button(bond_sel, text="DOWN", width=4, command=self.move_below).grid(
+            row=3, column=1, columnspan=1
+        )
 
     def draw_mode_change(self, _nothing: Optional[Any] = None) -> None:
         self.event_generate("<<RedrawAll>>", when="tail")
@@ -277,6 +283,12 @@ class TopToolbar(ttk.Frame):
     def minus_charge(self) -> None:
         self.event_generate("<<MinusChargeButtonPress>>", when="tail")
 
+    def move_above(self) -> None:
+        self.event_generate("<<MoveAboveButtonPress>>", when="tail")
+
+    def move_below(self) -> None:
+        self.event_generate("<<MoveBelowButtonPress>>", when="tail")
+
 
 class AppContainer(tk.Tk):
     """The main application window."""
@@ -332,6 +344,8 @@ class AppContainer(tk.Tk):
         self.bind("<<BondButton1Press>>", self.button_pressed_dativity)
         self.bind("<<PlusChargeButtonPress>>", lambda x: self.button_pressed_charge(1))
         self.bind("<<MinusChargeButtonPress>>", lambda x: self.button_pressed_charge(-1))
+        self.bind("<<MoveAboveButtonPress>>", lambda x: self.button_pressed_zaxis(1))
+        self.bind("<<MoveBelowButtonPress>>", lambda x: self.button_pressed_zaxis(-1))
 
     def button_pressed_mode(self, _event: tk.Event) -> None:
         if not self.toolbar.is_select:
@@ -452,6 +466,21 @@ class AppContainer(tk.Tk):
                     if err == eng.BondingError.OK:
                         sel_item.charge = change_to
                         changes.append(self.atoms.index(sel_item))
+        self.redraw_all()
+
+    def button_pressed_zaxis(self, change_z: int) -> None:
+        """The Z coordinate of the selected atom is moved."""
+        if self.mode == self.Modes.NORMAL:
+            changes: list[int] = []
+            for sel_num in self.selected:
+                if sel_num not in self.graphics:
+                    continue
+                sel_item = self.graphics[sel_num]
+                if isinstance(sel_item, eng.Atom):
+                    if self.atoms.index(sel_item) in changes:
+                        continue
+                    sel_item.coord_z += change_z
+                    changes.append(self.atoms.index(sel_item))
         self.redraw_all()
 
     def optimize_2D(self, _event: tk.Event) -> None:
@@ -672,20 +701,27 @@ class AppContainer(tk.Tk):
     def select_nothing(self) -> None:
         """Clears the selection and changes the previously selected objects
         back to their default look."""
-        for sel_item in self.selected:
-            tags: Sequence[str] = self.mol_canvas.gettags(sel_item)
+        for sel_num in self.selected:
+            tags: Sequence[str] = self.mol_canvas.gettags(sel_num)
             if "empty" in tags:
-                self.mol_canvas.itemconfigure(sel_item, fill="")
+                self.mol_canvas.itemconfigure(sel_num, fill="")
             else:
-                self.mol_canvas.itemconfigure(sel_item, fill="black")
+                self.mol_canvas.itemconfigure(sel_num, fill="black")
             if "atom_text" in tags:
-                self.change_font_weight(sel_item, "normal")
+                self.change_font_weight(sel_num, "normal")
             if "bond" in tags:
-                self.mol_canvas.itemconfigure(sel_item, width=1)
+                sel_item = self.graphics[sel_num]
+                assert isinstance(sel_item, eng.CovBond)
+                atom1: eng.Atom = sel_item.atoms[0]
+                atom2: eng.Atom = sel_item.atoms[1]
+                if atom1.coord_z > 0 and atom2.coord_z == atom1.coord_z:
+                    self.mol_canvas.itemconfigure(sel_num, width=3)
+                else:
+                    self.mol_canvas.itemconfigure(sel_num, width=1)
             if "atom_rad" in tags:
-                self.mol_canvas.itemconfigure(sel_item, outline="black", width=1)
+                self.mol_canvas.itemconfigure(sel_num, outline="black", width=1)
             if "atom_lpair" in tags:
-                self.mol_canvas.itemconfigure(sel_item, width=1)
+                self.mol_canvas.itemconfigure(sel_num, width=1)
         self.selected = []
 
     def close_selection(
@@ -809,6 +845,8 @@ class AppContainer(tk.Tk):
     ) -> list[int]:
         """Draws the bond between two atom instances."""
         x1, y1, x2, y2 = atom1.coord_x, atom1.coord_y, atom2.coord_x, atom2.coord_y
+        line_thickness: int = 1
+        line_dash: Optional[tuple[int, int]] = None
         if bondlen == -1:
             bondlen = sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
         angle: float = atan2(
@@ -829,6 +867,13 @@ class AppContainer(tk.Tk):
             atomtag1 = f"atom_text-{self.atoms.index(atom1)}"
         if not self.hide_atom(atom2):
             atomtag2 = f"atom_text-{self.atoms.index(atom2)}"
+        if atom1.coord_z > 0 and atom1.coord_z == atom2.coord_z:
+            line_thickness = 3
+        if atom1.coord_z < 0 and atom1.coord_z == atom2.coord_z:
+            line_dash = (2, 1)
+        triangle: int = atom2.coord_z - atom1.coord_z
+        if order > 0 and dativity != 0:
+            triangle = 0
         bond_objects = self.draw_bond_lines(
             (x1, y1, x2, y2),
             bondlen,
@@ -837,6 +882,9 @@ class AppContainer(tk.Tk):
             obscure_area=(atomtag1, atomtag2),
             reverse_second_bond=reverse_second_bond,
             color=color,
+            triangle=triangle,
+            width=line_thickness,
+            dashed=line_dash,
             tags=tags,
         )
         return bond_objects
@@ -909,7 +957,10 @@ class AppContainer(tk.Tk):
         dativity: float = 0,
         obscure_area: Optional[tuple[str, str]] = None,
         reverse_second_bond: bool = False,
+        triangle: int = 0,
         color: str = "black",
+        width: int = 1,
+        dashed: Optional[tuple[int, int]] = None,
         tags: Optional[tuple[str, ...]] = None,
     ) -> list[int]:
         """Draws a bond between two atoms and returns the list of line
@@ -955,15 +1006,43 @@ class AppContainer(tk.Tk):
             elif dativity > 0:
                 arrowtype = "last"
                 dativity -= 1
-            bond_line_id = self.mol_canvas.create_line(
-                xd1 + xs,
-                yd1 + ys,
-                xd2 + xs,
-                yd2 + ys,
-                arrow=arrowtype,
-                fill=color,
-                tags=tags,
-            )
+            if triangle == 0:
+                bond_line_id = self.mol_canvas.create_line(
+                    (xd1 + xs, yd1 + ys, xd2 + xs, yd2 + ys),
+                    arrow=arrowtype,
+                    fill=color,
+                    width=width,
+                    dash=dashed,
+                    tags=tags,
+                )
+            elif triangle > 0:
+                angle: float = atan2(yd2 - yd1, xd2 - xd1)
+                bond_line_id = self.mol_canvas.create_polygon(
+                    (
+                        xd1 + xs,
+                        yd1 + ys,
+                        xd2 + xs + 2 * cos(angle - pi / 2),
+                        yd2 + ys + 2 * sin(angle - pi / 2),
+                        xd2 + xs - 2 * cos(angle - pi / 2),
+                        yd2 + ys - 2 * sin(angle - pi / 2),
+                    ),
+                    fill=color,
+                    tags=tags
+                )
+            else:
+                angle: float = atan2(yd2 - yd1, xd2 - xd1)
+                bond_line_id = self.mol_canvas.create_polygon(
+                    (
+                        xd1 + xs + 2 * cos(angle - pi / 2),
+                        yd1 + ys + 2 * sin(angle - pi / 2),
+                        xd1 + xs - 2 * cos(angle - pi / 2),
+                        yd1 + ys - 2 * sin(angle - pi / 2),
+                        xd2 + xs,
+                        yd2 + ys,
+                    ),
+                    fill=color,
+                    tags=tags
+                )
             bond_objects.append(bond_line_id)
         return bond_objects
 
