@@ -7,11 +7,12 @@ Created on Thu Mar 10 07:43:08 2022
 """
 
 import mol_eng as eng
+import mol_opt as opt
 import elements as el
 
 def carbon_monoxide():
-    a = eng.Atom(el.Carbon(), [20, 20])
-    b = eng.Atom(el.Oxygen(), [40, 20])
+    a = eng.Atom(el.Carbon(), (20, 20))
+    b = eng.Atom(el.Oxygen(), (40, 20))
     print(a)
     print(b)
     c = a.bond(b, 3, -1)
@@ -33,8 +34,8 @@ def carbon_monoxide():
     return [a, b], a.bonds
 
 def XH(x = "C"):
-    a = eng.add_atom_by_symbol(x, [20, 20])
-    b = eng.add_atom_by_symbol("H", [40, 20])
+    a = eng.add_atom_by_symbol(x, (20, 20))
+    b = eng.add_atom_by_symbol("H", (40, 20))
     assert isinstance(a, eng.Atom)
     assert isinstance(b, eng.Atom)
     print(a)
@@ -47,11 +48,11 @@ def SF6(n: int=6, central: str="S", terminal: str="F") -> tuple[list[eng.Atom], 
     loc_x = [60, 100, 120, 60, 100, 40]
     loc_y = [50, 50, 80, 110, 110, 80]
     molecules: list[eng.Atom] = []
-    new_atom = eng.add_atom_by_symbol(central, [80, 80])
+    new_atom = eng.add_atom_by_symbol(central, (80, 80))
     assert isinstance(new_atom, eng.Atom)
     molecules.append(new_atom)
     for x, y in zip(loc_x[0:n], loc_y[0:n]):
-        new_atom = eng.add_atom_by_symbol(terminal, [x, y])
+        new_atom = eng.add_atom_by_symbol(terminal, (x, y))
         assert isinstance(new_atom, eng.Atom)
         molecules.append(new_atom)
         molecules[-1].bond(molecules[0])
@@ -60,11 +61,11 @@ def SF6(n: int=6, central: str="S", terminal: str="F") -> tuple[list[eng.Atom], 
     return molecules, molecules[0].bonds
 
 def methane():
-    a = eng.Atom(el.Carbon(), [40, 40])
-    b = eng.Atom(el.Hydrogen(), [20, 40])
-    c = eng.Atom(el.Hydrogen(), [60, 40])
-    d = eng.Atom(el.Hydrogen(), [40, 20])
-    e = eng.Atom(el.Hydrogen(), [40, 60])
+    a = eng.Atom(el.Carbon(), (40, 40))
+    b = eng.Atom(el.Hydrogen(), (20, 40))
+    c = eng.Atom(el.Hydrogen(), (60, 40))
+    d = eng.Atom(el.Hydrogen(), (40, 20))
+    e = eng.Atom(el.Hydrogen(), (40, 60))
     a.bond(b)
     a.bond(c)
     a.bond(d)
@@ -85,7 +86,7 @@ def optimize_tst():
     molecules, bonds = SF6(4, "Xe", "F")
     print(molecules)
     print([bond.length for bond in bonds])
-    eng.optimize_2D(molecules[0])
+    opt.optimize_2D(molecules[0])
     print("== After optimization ==")
     print(molecules)
     print([bond.length for bond in bonds])

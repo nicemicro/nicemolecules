@@ -303,7 +303,8 @@ class AppContainer(tk.Tk):
     def __init__(self, *args, **kwargs) -> None:
         tk.Tk.__init__(self, *args, **kwargs)
         self.atoms: list[eng.Atom] = []
-        self.bonds: list[eng.CovBond] = []
+        self.cov_bonds: list[eng.CovBond] = []
+        self.deloc_bonds: list[eng.Bond] = []
         self.graphics: dict[int, Union[eng.Atom, eng.CovBond]] = {}
         self.selected: list[int] = []
         self.event_listened: bool = False
@@ -437,7 +438,10 @@ class AppContainer(tk.Tk):
                             for key, obj in self.graphics.items()
                             if obj != removed_bond
                         }
-                        self.bonds.remove(removed_bond)
+                        if isinstance(removed_bond, eng.CovBond):
+                            self.cov_bonds.remove(removed_bond)
+                        else:
+                            self.deloc_bonds.remove(removed_bond)
                 elif isinstance(sel_item, eng.CovBond):
                     sel_item.delete()
                     self.graphics = {
@@ -445,7 +449,7 @@ class AppContainer(tk.Tk):
                         for key, obj in self.graphics.items()
                         if obj != sel_item
                     }
-                    self.bonds.remove(sel_item)
+                    self.cov_bonds.remove(sel_item)
             self.selected = []
             self.redraw_all()
 
@@ -591,7 +595,7 @@ class AppContainer(tk.Tk):
                 order=self.toolbar.bond_order,
                 dative=self.toolbar.bond_dativity,
             )
-            self.bonds.append(new_bond)
+            self.cov_bonds.append(new_bond)
             self.redraw_all()
             self.set_normal_mode()
         if self.mode == self.Modes.LINK_ATOMS:
@@ -628,7 +632,7 @@ class AppContainer(tk.Tk):
                 dative=self.toolbar.bond_dativity,
             )
             assert new_bond is not None, "Creating a bond failed"
-            self.bonds.append(new_bond)
+            self.cov_bonds.append(new_bond)
             self.redraw_all()
             self.set_normal_mode()
 
@@ -1016,7 +1020,7 @@ class AppContainer(tk.Tk):
                     tags=tags,
                 )
             elif triangle > 0:
-                angle: float = atan2(yd2 - yd1, xd2 - xd1)
+                angle = atan2(yd2 - yd1, xd2 - xd1)
                 bond_line_id = self.mol_canvas.create_polygon(
                     (
                         xd1 + xs,
@@ -1030,7 +1034,7 @@ class AppContainer(tk.Tk):
                     tags=tags
                 )
             else:
-                angle: float = atan2(yd2 - yd1, xd2 - xd1)
+                angle = atan2(yd2 - yd1, xd2 - xd1)
                 bond_line_id = self.mol_canvas.create_polygon(
                     (
                         xd1 + xs + 2 * cos(angle - pi / 2),
@@ -1361,7 +1365,7 @@ class AppContainer(tk.Tk):
                 "<B1-Motion>",
                 lambda event, atom_id=atom_id: self.drag_atom(atom_id, event),
             )
-        for bond_id, bond in enumerate(self.bonds):
+        for bond_id, bond in enumerate(self.cov_bonds):
             bondlen = bond.length
             if bondlen == 0:
                 continue

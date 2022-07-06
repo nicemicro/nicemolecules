@@ -6,7 +6,7 @@ Created on Mon Feb 21 15:52:19 2022
 """
 
 from math import sqrt, atan2, pi
-from typing import Optional, Sequence
+from typing import Optional, Any
 from enum import IntEnum, auto
 import elements as el
 
@@ -22,8 +22,80 @@ class BondingError(IntEnum):
     HYPERVALENT_OTHER = auto()
     MISC_ERROR = auto()
 
+class Bond:
+    """
+    Representing any type of bond between any number of atoms.
+    """
 
-class CovBond:
+    def get_atoms(self):
+        """Returns the atoms constituting this bond."""
+        return self._atoms.copy()
+
+    def get_electrons(self) -> list[int]:
+        """Returns the number of electrons constituting this bond."""
+        return self._electrons.copy()
+
+    def get_electron_count(self) -> int:
+        """Returns the number of electrons participating in the formation of
+        this bond."""
+        return sum(self.electrons)
+
+    def toss(self, new_value) -> None:
+        """Prohibits changing attributes."""
+        raise AttributeError("Can't directly modify attribute")
+
+    atoms = property(get_atoms, toss)
+    electrons = property(get_electrons, toss)
+    electron_count = property(get_electron_count, toss)
+
+    def __init__(
+        self, atoms, electrons: Optional[list[int]] = None
+    ):
+        assert isinstance(atoms, list)
+        self._atoms: list[Atom] = atoms
+        self._electrons: list[int]
+        if electrons is None:
+            self._electrons = [1] * len(atoms)
+        else:
+            if len(electrons) != len(atoms):
+                raise RuntimeError("Atom and electon list has to be the same length")
+            self._electrons = electrons
+
+    def describe(self) -> str:
+        """Returns a string description of the bond."""
+        desc: str = ""
+        for atom, electron in zip(self.atoms, self.electrons):
+            desc += f"  Atom symbol: {atom.symbol}"
+            desc += f" at ({atom.coord_x}, {atom.coord_y}) with {electron} electrons\n"
+        return desc
+
+    def __repr__(self) -> str:
+        return super().__repr__() + "\n" + self.describe()
+
+    def atom_electrons(self, one_atom):
+        """Returns the number of electrons from a certain atom that was donated
+        to this bond."""
+        assert isinstance(one_atom, Atom), "Only atoms are involved in a bond."
+        if one_atom not in self.atoms:
+            return None
+        return self.electrons[self.atoms.index(one_atom)]
+
+    def other_atoms(self, one_atom):
+        """Returns a list of other Atom instances, except the one received as
+        parameter."""
+        assert isinstance(one_atom, Atom), "Only atoms are involved in a bond."
+        if one_atom not in self.atoms:
+            return None
+        return list(atom for atom in self.atoms if atom != one_atom)
+
+    def delete(self):
+        """Removes itself from the atoms it was bonded to"""
+        for connected_atom in self.atoms:
+            connected_atom.remove_bond(self)
+        self._atoms = []
+
+
+class CovBond(Bond):
     """
     Representing a covalent bond between atoms.
     """
@@ -50,11 +122,6 @@ class CovBond:
         assert new_electrons is not None
         self.set_electrons(new_electrons)
 
-    def get_electron_count(self) -> int:
-        """Returns the number of electrons participating in the formation of
-        this bond."""
-        return sum(self.electrons)
-
     def get_coords(self) -> tuple[float, float, float, float]:
         """Returns the coordinates of the bond."""
         return (
@@ -70,20 +137,18 @@ class CovBond:
             return 0
         return atomdist(self.atoms[0], self.atoms[1])
 
-    def get_atoms(self):
-        """Returns the atoms constituting this bond."""
-        return self._atoms.copy()
-
-    def get_electrons(self) -> list[int]:
-        """Returns the number of electrons constituting this bond."""
-        return self._electrons.copy()
-
     def set_electrons(self, new_electrons: list[int]) -> None:
         """Sets the electron configuration of the bond."""
         err = self.can_change_electrons(new_electrons)
         if err != BondingError.OK:
-            raise RuntimeError(f"Changing bond configuration failed. Error: {err}")
+            raise RuntimeError(
+                f"Changing bond configuration failed. Error: {err}"
+            )
         self._electrons = new_electrons.copy()
+
+    def get_electrons(self) -> list[int]:
+        """Returns the number of electrons constituting this bond."""
+        return super().get_electrons()
 
     def toss(self, new_value) -> None:
         """Prohibits changing attributes."""
@@ -91,27 +156,21 @@ class CovBond:
 
     order = property(get_order, set_order)
     dativity = property(get_dativity, set_dativity)
-    electron_count = property(get_electron_count, toss)
     coords = property(get_coords, toss)
     length = property(get_length, toss)
-    atoms = property(get_atoms, toss)
     electrons = property(get_electrons, set_electrons)
 
     def __init__(
-        self, atoms, electrons: Optional[list[int]] = None, order: int = 1, dative=0
+        self, atoms, electrons: Optional[list[int]] = None, order: int = 1, dative: int = 0
     ):
-        self._atoms: list[Atom] = atoms
         if electrons is None:
             electrons = self.electrons_calc(order, dative)
         assert electrons is not None
-        self._electrons = electrons
+        super().__init__(atoms, electrons)
 
     def describe(self) -> str:
-        """Returns a string description of the bond."""
-        desc = f"Bond order: {self.order}\n"
-        for atom, electron in zip(self.atoms, self.electrons):
-            desc += f"  Atom symbol: {atom.symbol}"
-            desc += f" at ({atom.coord_x}, {atom.coord_y}) with {electron} electrons\n"
+        desc: str = f"Bond order: {self.order}\n"
+        desc += f"Bond dativity: {self.dativity}\n"
         return desc
 
     def __repr__(self) -> str:
@@ -173,28 +232,6 @@ class CovBond:
                 return BondingError.HYPERVALENT_OTHER
         return BondingError.OK
 
-    def atom_electrons(self, one_atom):
-        """Returns the number of electrons from a certain atom that was donated
-        to this bond."""
-        assert isinstance(one_atom, Atom), "Only atoms are involved in a bond."
-        if one_atom not in self.atoms:
-            return None
-        return self.electrons[self.atoms.index(one_atom)]
-
-    def other_atoms(self, one_atom):
-        """Returns a list of other Atom instances, except the one received as
-        parameter."""
-        assert isinstance(one_atom, Atom), "Only atoms are involved in a bond."
-        if one_atom not in self.atoms:
-            return None
-        return list(atom for atom in self.atoms if atom != one_atom)
-
-    def delete(self):
-        """Removes itself from the atoms it was bonded to"""
-        for connected_atom in self.atoms:
-            connected_atom.remove_bond(self)
-        self._atoms = []
-
 
 class Atom:
     """
@@ -228,7 +265,7 @@ class Atom:
             raise RuntimeError(f"Bonding to atom failed. Error: {err}")
         self._charge = new_charge
 
-    def get_bonds(self) -> list[CovBond]:
+    def get_bonds(self) -> list[Bond]:
         return self._bonds.copy()
 
     def get_bonded_atoms(self):
@@ -324,7 +361,7 @@ class Atom:
 
     _element: el.Element
     _charge: int
-    _bonds: list[CovBond]
+    _bonds: list[Bond]
     coord_x: float
     coord_y: float
     coord_z: int
@@ -466,7 +503,7 @@ class Atom:
             return BondingError.HYPERVALENT_OTHER  # This atom is NOT the "first"
         return BondingError.OK
 
-    def remove_bond(self, bond_instance: CovBond) -> None:
+    def remove_bond(self, bond_instance: Bond) -> None:
         """Removes a bond instance registered to this atom as a part of deleting
         a bond."""
         assert (
@@ -474,9 +511,9 @@ class Atom:
         ), "Bond trying to be deleted is not registered to this atom"
         self._bonds.remove(bond_instance)
 
-    def register_bond(self, new_bond: CovBond) -> None:
+    def register_bond(self, new_bond: Bond) -> None:
         """
-        Register a CovBond instance to this atom, created by the can_bond
+        Register a Bond instance to this atom, created by the bond()
         function of an other Atom instance.
         """
         if self in new_bond.atoms:
@@ -495,20 +532,20 @@ class Atom:
         return other_atom in [item for sublist in bond_list_lists for item in sublist]
 
     def bond_instance(self, other_atom) -> Optional[CovBond]:
-        """Returns the bond instance connecting the current atom to the other_atom.
+        """Returns the covalent bond instance connecting the current atom to the other_atom.
         If there is no bond, returns None."""
         assert isinstance(
             other_atom, Atom
         ), "Only Atom instance can be bonded to an Atom"
         for bond in self._bonds:
-            if other_atom in bond.other_atoms(self):
+            if isinstance(bond, CovBond) and other_atom in bond.other_atoms(self):
                 return bond
         return None
 
-    def unbond_all(self) -> list[CovBond]:
+    def unbond_all(self) -> list[Bond]:
         """Removes all bonds from the atom. Returns the instances of the now
-        unused bonds."""
-        bonds_loop: list[CovBond] = self._bonds.copy()
+        affected bonds."""
+        bonds_loop: list[Bond] = self._bonds.copy()
         for bond in bonds_loop:
             bond.delete()
         return bonds_loop
