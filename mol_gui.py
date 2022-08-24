@@ -110,6 +110,13 @@ class TopToolbar(ttk.Frame):
         ttk.Frame.__init__(self, parent)
         #s = ttk.Style()
         #s.configure("test.TFrame", background="red")
+        selected = ttk.Style()
+        selected.configure(
+            "active.TButton",
+            foreground="blue",
+            background="white",
+            font="helvetica 9 bold"
+        )
         self.controller: tk.Tk = controller
         self._mode: int = self.Modes.ADD_ATOM
         self._symbol: str = "C"
@@ -140,21 +147,25 @@ class TopToolbar(ttk.Frame):
         )
         custom_add = ttk.Frame(self, padding="0 0 0 5")
         custom_add.grid(row=2, column=0, columnspan=1, sticky="nsew")
-        self.status_text_update()
 
-        ttk.Button(
+        self.buttons: dict[str, ttk.Button] = {}
+        
+        self.buttons["add atom"] = ttk.Button(
             mode_row,
             text="Add atom",
             command=lambda: self.set_mode(self.Modes.ADD_ATOM),
-        ).grid(row=0, column=0, columnspan=1)
-        ttk.Button(
+        )
+        self.buttons["add atom"].grid(row=0, column=0, columnspan=1)
+        self.buttons["connect atoms"] = ttk.Button(
             mode_row,
             text="Connect atoms",
             command=lambda: self.set_mode(self.Modes.ADD_BOND),
-        ).grid(row=0, column=1, columnspan=1)
-        ttk.Button(
+        )
+        self.buttons["connect atoms"].grid(row=0, column=1, columnspan=1)
+        self.buttons["select"] = ttk.Button(
             mode_row, text="Select", command=lambda: self.set_mode(self.Modes.SELECT)
-        ).grid(row=0, column=2, columnspan=1)
+        )
+        self.buttons["select"].grid(row=0, column=2, columnspan=1)
 
         self._hide_carbon = tk.IntVar()
         self._hide_carbon.set(0)
@@ -183,37 +194,57 @@ class TopToolbar(ttk.Frame):
             for index, symbol in enumerate(elements):
                 if symbol == "":
                     continue
-                ttk.Button(
+                self.buttons[f"atom {symbol}"] = ttk.Button(
                     symbol_sel,
                     text=symbol,
                     width=3,
                     command=lambda symbol=symbol: self.set_symbol(symbol),
-                ).grid(row=row, column=index, columnspan=1)
+                )
+                self.buttons[f"atom {symbol}"].grid(row=row, column=index, columnspan=1)
         ttk.Entry(custom_add, textvariable=self.custom_atom_symbol).grid(row=0, column=0, sticky="nsew")
-        ttk.Button(
+        self.buttons["atom custom"] = ttk.Button(
             custom_add,
             text="Set",
             command=self.set_custom_symbol
-        ).grid(row=0, column=1, sticky="nsew")
+        )
+        self.buttons["atom custom"].grid(row=0, column=1, sticky="nsew")
 
-        ttk.Button(bond_sel, text="--", width=4, command=lambda: self.set_bond([1, None])).grid(
-            row=0, column=0, columnspan=1
+        self.buttons["bond order 1"] = ttk.Button(
+            bond_sel, text="--",
+            width=4,
+            command=lambda: self.set_bond([1, None]))
+        self.buttons["bond order 1"].grid(row=0, column=0, columnspan=1)
+        self.buttons["bond order 2"] = ttk.Button(
+            bond_sel,
+            text="==",
+            width=4,
+            command=lambda: self.set_bond([2, None])
         )
-        ttk.Button(bond_sel, text="==", width=4, command=lambda: self.set_bond([2, None])).grid(
-            row=0, column=1, columnspan=1
-        )
-        ttk.Button(bond_sel, text="≡≡", width=4, command=lambda: self.set_bond([3, None])).grid(
-            row=0, column=2, columnspan=1
-        )
-        ttk.Button(bond_sel, text="↮", width=4, command=lambda: self.set_bond([None, 0])).grid(
-            row=1, column=0, columnspan=1
-        )
-        ttk.Button(bond_sel, text="⟶", width=4, command=lambda: self.set_bond([None, 1])).grid(
-            row=1, column=1, columnspan=1
-        )
-        ttk.Button(bond_sel, text="⟵", width=4, command=lambda: self.set_bond([None, -1])).grid(
-            row=1, column=2, columnspan=1
-        )
+        self.buttons["bond order 2"].grid(row=0, column=1, columnspan=1)
+        self.buttons["bond order 3"] = ttk.Button(
+            bond_sel,
+            text="≡≡",
+            width=4,
+            command=lambda: self.set_bond([3, None]))
+        self.buttons["bond order 3"].grid(row=0, column=2, columnspan=1)
+        self.buttons["bond dative 0"] = ttk.Button(
+            bond_sel,
+            text="↮",
+            width=4,
+            command=lambda: self.set_bond([None, 0]))
+        self.buttons["bond dative 0"].grid(row=1, column=0, columnspan=1)
+        self.buttons["bond dative 1"] = ttk.Button(
+            bond_sel,
+            text="⟶",
+            width=4,
+            command=lambda: self.set_bond([None, 1]))
+        self.buttons["bond dative 1"].grid(row=1, column=1, columnspan=1)
+        self.buttons["bond dative -1"] = ttk.Button(
+            bond_sel,
+            text="⟵",
+            width=4,
+            command=lambda: self.set_bond([None, -1]))
+        self.buttons["bond dative -1"].grid(row=1, column=2, columnspan=1)
         ttk.Button(bond_sel, text="(-)", width=4, command=self.minus_charge).grid(
             row=2, column=0, columnspan=1
         )
@@ -226,18 +257,30 @@ class TopToolbar(ttk.Frame):
         ttk.Button(bond_sel, text="DOWN", width=4, command=self.move_below).grid(
             row=3, column=1, columnspan=1
         )
+        self.status_text_update()
 
     def draw_mode_change(self, _nothing: Optional[Any] = None) -> None:
         self.event_generate("<<RedrawAll>>", when="tail")
 
     def status_text_update(self) -> None:
+        for button in self.buttons.values():
+            button["style"] = "TButton"
         text: str = "MODE: "
         if self._mode == self.Modes.ADD_ATOM:
             text += "add atom\n"
+            self.buttons["add atom"]["style"] = "active.TButton"
+            if f"atom {self._symbol}" in self.buttons:
+                self.buttons[f"atom {self._symbol}"]["style"] = "active.TButton"
+            else:
+                self.buttons["atom custom"]["style"] = "active.TButton"
+            self.buttons[f"bond order {self._bond[0]}"]["style"] = "active.TButton"
+            self.buttons[f"bond dative {self._bond[1]}"]["style"] = "active.TButton"
         elif self._mode == self.Modes.ADD_BOND:
             text += "bond atoms\n"
+            self.buttons["connect atoms"]["style"] = "active.TButton"
         elif self._mode == self.Modes.SELECT:
             text += "select\n"
+            self.buttons["select"]["style"] = "active.TButton"
         text += f"ATOM SYMBOL: {self._symbol}\n"
         text += f"BOND ORDER: {self._bond[0]} "
         if self._bond[1] == 0:
