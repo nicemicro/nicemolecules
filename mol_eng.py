@@ -6,8 +6,9 @@ Created on Mon Feb 21 15:52:19 2022
 """
 
 from math import sqrt, atan2, pi
-from typing import Optional, Any
+from typing import Optional, Any, Union
 from enum import IntEnum, auto
+from xml.etree import ElementTree as ET
 import elements as el
 
 class BondingError(IntEnum):
@@ -21,6 +22,7 @@ class BondingError(IntEnum):
     HYPERVALENT_FIRST = auto()
     HYPERVALENT_OTHER = auto()
     MISC_ERROR = auto()
+
 
 class Bond:
     """
@@ -247,6 +249,9 @@ class Atom:
     def get_symbol(self) -> str:
         return self._element.symbol
 
+    def get_element(self) -> el.Element:
+        return self._element
+
     def get_valence(self) -> int:
         return self._element.valence_el - self._charge
 
@@ -367,6 +372,7 @@ class Atom:
     coord_z: int
     coords = property(get_coords, set_coords)
     symbol = property(get_symbol, toss)
+    element = property(get_element, toss)
     valence = property(get_valence, toss)
     fullshell = property(get_fullshell, toss)
     hypervalent = property(get_hypervalent, toss)
@@ -426,6 +432,14 @@ class Atom:
 
     def __repr__(self) -> str:
         return super().__repr__() + "\n" + self.describe(True)
+
+    def to_dict(self) -> dict[str, str]:
+        desc: dict[str, str] = {}
+        desc["coord_x"] = str(self.coord_x)
+        desc["coord_y"] = str(self.coord_y)
+        desc["coord_z"] = str(self.coord_z)
+        desc["charge"] = str(self._charge)
+        return desc
 
     def can_change_element(self, element: el.Element) -> BondingError:
         """Checks whether the atom can be switched to be a different
@@ -691,3 +705,40 @@ def atom_angle(one_atom: Atom, other_atom: Atom) -> float:
     if angle < 0:
         angle = 2 * pi + angle
     return angle
+
+def to_xml(atom_bond_list: list[Union[Atom, Bond]], filename: str) -> None:
+    root: ET.Element = ET.Element("NiceMolecules Data")
+    data_unit: ET.SubElement
+    desc: dict[str, str]
+    used_elements: list[el.Element] = []
+    for thing in atom_bond_list:
+        if isinstance(thing, Atom):
+            new_element = thing.element
+            if new_element not in used_elements:
+                used_elements.append(new_element)
+    for element in used_elements:
+        data_unit = ET.SubElement(root, "Element", attrib={"symbol": element.symbol})
+        for key, value in element.to_dict().items():
+            ET.SubElement(data_unit, key).text = value
+    for thing in atom_bond_list:
+        if isinstance(thing, Atom):
+            data_unit = ET.SubElement(root, "Atom")
+            ET.SubElement(data_unit, "element_index").text = str(
+                used_elements.index(thing.element)
+            )
+            for key, value in thing.to_dict().items():
+                ET.SubElement(data_unit, key).text = value
+            for bond in thing.bonds:
+                ET.SubElement(data_unit, "Bond").text = str(
+                    atom_bond_list.index(bond)
+                )
+        elif isinstance(thing, Bond):
+            data_unit = ET.SubElement(root, "Bond")
+            for atom, electrons in zip(thing.atoms, thing.electrons):
+                ET.SubElement(
+                    data_unit,
+                    "Atom",
+                    attrib={"electrons": str(electrons)}
+                ).text = str(atom_bond_list.index(atom))
+    tree = ET.ElementTree(root)
+    tree.write(filename)

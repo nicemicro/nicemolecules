@@ -99,3 +99,4 @@ if __name__ == '__main__':
     #molecules, bonds = test3()
     #description(molecules, [0])
     #optimize_tst()
+    eng.to_xml(molecules + bonds, "test.xml")

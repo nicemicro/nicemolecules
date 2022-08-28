@@ -45,6 +45,13 @@ class Element:
     fullshell = property(get_fullshell, set_attr, del_attr)
     hypervalent = property(get_hypervalent, set_attr, del_attr)
 
+    def to_dict(self) -> dict[str, str]:
+        desc: dict[str, str] = {}
+        desc["valence_el"] = str(self._valence_el)
+        desc["fullshell"] = str(self._fullshell)
+        desc["hypervalent"] = str(self.hypervalent)
+        return desc
+
 
 class CustomElement(Element):
     _valence_el = 0
