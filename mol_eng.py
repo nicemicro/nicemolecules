@@ -11,6 +11,10 @@ from enum import IntEnum, auto
 from xml.etree import ElementTree as ET
 import elements as el
 
+
+VERSION: str = "0.0.0"
+
+
 class BondingError(IntEnum):
     """Reasons a bond formation might be impossible."""
 
@@ -609,6 +613,42 @@ class UnrestrictedAtom(Atom):
         return BondingError.OK
 
 
+def atom_from_dict(element: el.Element, params: dict[str, Any]) -> Atom:
+    coord_x: float = 0.0
+    coord_y: float = 0.0
+    coord_z: int = 0
+    charge: int = 0
+    for key, val in params.items():
+        value = str(val)
+        if key == "coord_x":
+            coord_x = float(value)
+        if key == "coord_y":
+            coord_y = float(value)
+        if key == "coord_z":
+            coord_z = int(value)
+        if key == "charge":
+            charge = int(value)
+    return Atom(element, (coord_x, coord_y), coord_z, charge)
+
+
+def undestr_atom_from_dict(symbol: str, params: dict[str, Any]) -> UnrestrictedAtom:
+    coord_x: float = 0.0
+    coord_y: float = 0.0
+    coord_z: int = 0
+    charge: int = 0
+    for key, val in params.items():
+        value = str(val)
+        if key == "coord_x":
+            coord_x = float(value)
+        if key == "coord_y":
+            coord_y = float(value)
+        if key == "coord_z":
+            coord_z = int(value)
+        if key == "charge":
+            charge = int(value)
+    return UnrestrictedAtom(symbol, (coord_x, coord_y), coord_z, charge)
+
+
 def element_by_symbol(symbol: str) -> Optional[el.Element]:
     """Returns the corresponding element instance to the element symbol."""
     element_dict = {element.symbol: element for element in el.element_table}
@@ -706,39 +746,118 @@ def atom_angle(one_atom: Atom, other_atom: Atom) -> float:
         angle = 2 * pi + angle
     return angle
 
+
 def to_xml(atom_bond_list: list[Union[Atom, Bond]], filename: str) -> None:
-    root: ET.Element = ET.Element("NiceMolecules Data")
-    data_unit: ET.SubElement
-    desc: dict[str, str]
+    """
+    Saves the list of atoms and bonds to an xml file.
+    """
+    root: ET.Element = ET.Element(
+        "NiceMolecules_Data",
+        attrib={"version": VERSION}
+    )
     used_elements: list[el.Element] = []
-    for thing in atom_bond_list:
-        if isinstance(thing, Atom):
-            new_element = thing.element
-            if new_element not in used_elements:
-                used_elements.append(new_element)
+    desc: dict[str, str]
+    atom_list: list[Atom] = [
+        thing for thing in atom_bond_list if isinstance(thing, Atom)
+    ]
+    bond_list: list[Bond] = [
+        thing for thing in atom_bond_list if isinstance(thing, Bond)
+    ]
+    for atom in atom_list:
+        if isinstance(atom, UnrestrictedAtom):
+            continue
+        new_element = atom.element
+        if new_element not in used_elements:
+            used_elements.append(new_element)
     for element in used_elements:
-        data_unit = ET.SubElement(root, "Element", attrib={"symbol": element.symbol})
+        desc = {"symbol": element.symbol}
+        if element in el.element_table:
+            desc["builtin"] = "y"
+        data_unit = ET.SubElement(root, "Element", attrib=desc)
         for key, value in element.to_dict().items():
             ET.SubElement(data_unit, key).text = value
-    for thing in atom_bond_list:
-        if isinstance(thing, Atom):
-            data_unit = ET.SubElement(root, "Atom")
-            ET.SubElement(data_unit, "element_index").text = str(
-                used_elements.index(thing.element)
-            )
-            for key, value in thing.to_dict().items():
-                ET.SubElement(data_unit, key).text = value
-            for bond in thing.bonds:
-                ET.SubElement(data_unit, "Bond").text = str(
-                    atom_bond_list.index(bond)
-                )
-        elif isinstance(thing, Bond):
-            data_unit = ET.SubElement(root, "Bond")
-            for atom, electrons in zip(thing.atoms, thing.electrons):
-                ET.SubElement(
-                    data_unit,
-                    "Atom",
-                    attrib={"electrons": str(electrons)}
-                ).text = str(atom_bond_list.index(atom))
+    for atom in atom_list:
+        desc = {}
+        if isinstance(atom, UnrestrictedAtom):
+            desc["unrestricted"] = "y"
+            desc["symbol"] = atom.symbol
+        else:
+            desc["element_index"] = str(used_elements.index(atom.element))
+        data_unit = ET.SubElement(root, "Atom", attrib=desc)
+        for key, value in atom.to_dict().items():
+            ET.SubElement(data_unit, key).text = value
+    for bond in bond_list:
+        desc = {}
+        if isinstance(bond, CovBond):
+            desc["covalent"] = "y"
+        data_unit = ET.SubElement(root, "Bond", attrib=desc)
+        for atom, electrons in zip(bond.atoms, bond.electrons):
+            ET.SubElement(
+                data_unit,
+                "Atom",
+                attrib={"electrons": str(electrons)}
+            ).text = str(atom_list.index(atom))
     tree = ET.ElementTree(root)
     tree.write(filename)
+
+
+def read_xml(filename: str) -> list[Union[Atom, Bond]]:
+    loaded: list[Union[Atom, Bond]] = []
+    tree = ET.parse(filename)
+    root = tree.getroot()
+    assert root.tag == "NiceMolecules_Data", "The XML file has some issues."
+    builtin_symbols: list[str] = [
+        element.symbol for element in el.element_table
+    ]
+    element_list: list[el.Element] = []
+    symbol: str
+    if "version" in root.attrib:
+        print("Loading file created with version ", root.attrib["version"])
+    else:
+        print("File version unknown.")
+    for element in [thing for thing in root if thing.tag == "Element"]:
+        symbol = element.attrib["symbol"]
+        if "builtin" in element.attrib and element.attrib["builtin"] == "y":
+            if symbol in builtin_symbols:
+                element_list.append(
+                    el.element_table[builtin_symbols.index(symbol)]
+                )
+            continue
+        element_list.append(
+            el.element_from_dict(
+                symbol,
+                {detail.tag: detail.text for detail in element}
+            )
+        )
+    for atom in [thing for thing in root if thing.tag == "Atom"]:
+        if "unrestricted" in atom.attrib and atom.attrib["unrestricted"] == "y":
+            if "symbol" in atom.attrib:
+                symbol = atom.attrib["symbol"]
+            else:
+                symbol = "R"
+            loaded.append(
+                undestr_atom_from_dict(
+                    symbol,
+                    {detail.tag: detail.text for detail in atom}
+                )
+            )
+            continue
+        loaded.append(
+            atom_from_dict(
+                element_list[int(atom.attrib["element_index"])],
+                {detail.tag: detail.text for detail in atom}
+            )
+        )
+    bond_instance: Bond
+    for bond in [thing for thing in root if thing.tag == "Bond"]:
+        if "covalent" in bond.attrib and bond.attrib["covalent"] == "y":
+            bond_instance = CovBond(
+                    [loaded[int(str(atom.text))] for atom in bond],
+                    [int(atom.attrib["electrons"]) for atom in bond]
+                )
+            loaded.append(bond_instance)
+            for atom in bond:
+                atom_instance = loaded[int(str(atom.text))]
+                assert isinstance(atom_instance, Atom)
+                atom_instance.register_bond(bond_instance)
+    return loaded

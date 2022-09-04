@@ -74,6 +74,13 @@ def methane():
     print(f"Electron angles: {a.electron_angles}")
     return [a, b, c, d, e], a.bonds
 
+def custom_element():
+    custom_el = el.CustomElement("Cstm", 3, 4, False)
+    return eng.Atom(custom_el, (150, 150))
+
+def unrestricted_atom():
+    return eng.UnrestrictedAtom("Unr", (200, 100))
+
 def description(atoms, to_show = None):
     if to_show is None:
         to_show = [0]
@@ -95,8 +102,9 @@ if __name__ == '__main__':
     #molecules, bonds = carbon_monoxide()
     #molecules, bonds = XH("B")
     molecules, bonds = SF6(4, "Xe", "F")
+    #molecules += [custom_element()]
+    molecules += [unrestricted_atom()]
     #molecules, bonds = methane()
-    #molecules, bonds = test3()
     #description(molecules, [0])
     #optimize_tst()
-    eng.to_xml(molecules + bonds, "test.xml")
+    eng.to_xml(molecules + bonds + [custom_element()], "test.xml")

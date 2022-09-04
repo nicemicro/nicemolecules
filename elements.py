@@ -6,6 +6,8 @@ Created on Fri Feb 25 07:27:35 2022
 @author: nicemicro
 """
 
+from typing import Any
+
 
 class Element:
     """
@@ -54,12 +56,17 @@ class Element:
 
 
 class CustomElement(Element):
-    _valence_el = 0
-    _fullshell = 0
-    _hypervalent = True
-
-    def __init__(self, symbol: str):
+    def __init__(
+        self,
+        symbol: str,
+        valence_el: int = 0,
+        fullshell: int = 0,
+        hypervalent: bool = True
+    ):
         self._symbol = symbol
+        self._valence_el = valence_el
+        self._fullshell = fullshell
+        self._hypervalent = hypervalent
         super().__init__()
 
 
@@ -128,6 +135,21 @@ class Xenon(Element):
     _symbol = "Xe"
     _valence_el = 8
     _hypervalent = True
+
+
+def element_from_dict(symbol: str, params: dict[str, Any]) -> Element:
+    valence_el: int = 0
+    fullshell: int = 0
+    hypervalent: bool = False
+    for key, val in params.items():
+        value: str = str(val)
+        if key == "valence_el":
+            valence_el = int(value)
+        if key == "fullshell":
+            fullshell = int(value)
+        if key == "hypervalent":
+            hypervalent = (value == "True")
+    return CustomElement(symbol, valence_el, fullshell, hypervalent)
 
 
 element_table: list[Element] = []
