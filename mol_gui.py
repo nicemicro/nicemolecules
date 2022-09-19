@@ -5,15 +5,16 @@ Created on Fri Feb 25 07:27:35 2022
 
 @author: nicemicro
 """
-import mol_eng as eng
-import mol_tst as tst
-import mol_opt as opt
 import tkinter as tk
+import sys
+from getopt import gnu_getopt
 from tkinter import ttk
 from tkinter import font as tkfont
 from math import sqrt, cos, sin, pi, atan2, tan
 from enum import IntEnum, auto
 from typing import Optional, Sequence, Union, Any, Literal
+import mol_eng as eng
+import mol_opt as opt
 
 MINDIST = 20
 DEFLEN = 30
@@ -343,7 +344,7 @@ class AppContainer(tk.Tk):
         ADD_LINKED_ATOM = auto()
         LINK_ATOMS = auto()
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, filename: str, *args, **kwargs) -> None:
         tk.Tk.__init__(self, *args, **kwargs)
         self.atoms: list[eng.Atom] = []
         self.cov_bonds: list[eng.CovBond] = []
@@ -353,6 +354,11 @@ class AppContainer(tk.Tk):
         self.event_listened: bool = False
         self.mode = self.Modes.NORMAL
         self.title("Nice Molecules")
+
+        if filename != "":
+            loaded = eng.read_xml(filename)
+            self.atoms = [thing for thing in loaded if isinstance(thing, eng.Atom)]
+            self.cov_bonds = [thing for thing in loaded if isinstance(thing, eng.CovBond)]
 
         self.symbol_font: tkfont.Font = tkfont.nametofont("TkDefaultFont")
         self.symbol_index_font = tkfont.Font(
@@ -390,6 +396,9 @@ class AppContainer(tk.Tk):
         self.bind("<<MinusChargeButtonPress>>", lambda x: self.button_pressed_charge(-1))
         self.bind("<<MoveAboveButtonPress>>", lambda x: self.button_pressed_zaxis(1))
         self.bind("<<MoveBelowButtonPress>>", lambda x: self.button_pressed_zaxis(-1))
+
+        if len(self.atoms) > 0:
+            self.redraw_all()
 
     def button_pressed_mode(self, _event: tk.Event) -> None:
         if not self.toolbar.is_select:
@@ -1436,10 +1445,14 @@ class AppContainer(tk.Tk):
                     self.change_font_weight(item_num, "bold")
 
 
-def main() -> None:
-    app = AppContainer()
+def main(cmdargs: list[str]) -> None:
+    _, args = gnu_getopt(cmdargs, "", [])
+    filename: str = ""
+    if len(args) > 0:
+        filename = args[0]
+    app = AppContainer(filename)
     app.mainloop()
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
