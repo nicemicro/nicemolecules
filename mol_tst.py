@@ -107,4 +107,4 @@ if __name__ == '__main__':
     #molecules, bonds = methane()
     #description(molecules, [0])
     #optimize_tst()
-    eng.to_xml(molecules + bonds + [custom_element()], "test.xml")
+    eng.to_xml(molecules + bonds + [custom_element()], "test.nm.xml")

@@ -10,6 +10,7 @@ import sys
 from getopt import gnu_getopt
 from tkinter import ttk
 from tkinter import font as tkfont
+from tkinter import filedialog as fd
 from math import sqrt, cos, sin, pi, atan2, tan
 from enum import IntEnum, auto
 from typing import Optional, Sequence, Union, Any, Literal
@@ -353,6 +354,7 @@ class AppContainer(tk.Tk):
         self.selected: list[int] = []
         self.event_listened: bool = False
         self.mode = self.Modes.NORMAL
+        self.filename: str = ""
         self.title("Nice Molecules")
 
         if filename != "":
@@ -377,14 +379,21 @@ class AppContainer(tk.Tk):
         container = ttk.Frame(self)
         container.grid(row=0, column=0, sticky="nsew")
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(0, weight=1)
+        self.rowconfigure(1, weight=1)
+
+        filemenubar = ttk.Frame(container)
+        filemenubar.grid(row=0, column=0, sticky="nsew")
+        ttk.Button(filemenubar, text="Open", command=self.open).grid(row=0, column=0, sticky="nsw")
+        ttk.Button(filemenubar, text="Save", command=self.save).grid(row=0, column=1, sticky="nsw")
+        ttk.Button(filemenubar, text="Save as...", command=self.save_as).grid(row=0, column=2, sticky="nsw")
 
         self.toolbar = TopToolbar(container, self)
-        self.toolbar.grid(row=0, column=0, sticky="nsew")
+        self.toolbar.grid(row=1, column=0, sticky="nsew")
 
         self.mol_canvas = tk.Canvas(container, width=800, height=600, bg="white")
-        self.mol_canvas.grid(row=1, column=0, sticky="nsew")
+        self.mol_canvas.grid(row=2, column=0, sticky="nsew")
         self.mol_canvas.bind("<Button-1>", self.leftclick_canvas)
+
         self.bind("<Delete>", self.delkey_pressed)
         self.bind("<F5>", self.optimize_2D)
         self.bind("<<RedrawAll>>", lambda x: self.redraw_all())
@@ -399,6 +408,56 @@ class AppContainer(tk.Tk):
 
         if len(self.atoms) > 0:
             self.redraw_all()
+
+    def save(self) -> None:
+        if self.filename == "":
+            self.save_as()
+            return
+        to_save: list[Union[eng.Bond, eng.Atom]] = []
+        to_save += self.atoms
+        to_save += self.cov_bonds
+        eng.to_xml(to_save, self.filename)
+        print(f"save {self.filename}")
+
+    def save_as(self) -> None:
+        new_file: str = fd.asksaveasfilename(
+            title = "Save as",
+            defaultextension = ".nm.xml",
+            filetypes = (
+                ("Nice Molecules XML", "*.nm.xml"),
+            )
+        )
+        if not isinstance(new_file, str):
+            return
+        if new_file == "":
+            return
+        print(f"save as {new_file}")
+        to_save: list[Union[eng.Bond, eng.Atom]] = []
+        to_save += self.atoms
+        to_save += self.cov_bonds
+        eng.to_xml(to_save, new_file)
+        self.filename = new_file
+        self.title(self.filename + " - Nice Molecules")
+
+    def open(self) -> None:
+        new_file: str = fd.askopenfilename(
+            title = "Open a file",
+            filetypes = (
+                ("Nice Molecules XML", "*.nm.xml"),
+                ("XML", "*.xml"),
+                ("All files", "*.*")
+            )
+        )
+        if not isinstance(new_file, str):
+            return
+        print(f"open {new_file}")
+        loaded: list[Union[eng.Atom, eng.Bond]]
+        loaded = eng.read_xml(new_file)
+        self.atoms = [thing for thing in loaded if isinstance(thing, eng.Atom)]
+        self.cov_bonds = [thing for thing in loaded if isinstance(thing, eng.CovBond)]
+        self.redraw_all()
+        self.filename = new_file
+        self.title(self.filename + " - Nice Molecules")
 
     def button_pressed_mode(self, _event: tk.Event) -> None:
         if not self.toolbar.is_select:
