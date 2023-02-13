@@ -56,6 +56,16 @@ class Element:
 
 
 class CustomElement(Element):
+    def get_fullshell(self) -> int:
+        if self._fullshell == 0:
+            return 9999
+        return self._fullshell
+
+    def get_valence_el(self) -> int:
+        if self._valence_el == 0:
+            return 9999
+        return self._valence_el
+
     def __init__(
         self,
         symbol: str,
@@ -68,6 +78,15 @@ class CustomElement(Element):
         self._fullshell = fullshell
         self._hypervalent = hypervalent
         super().__init__()
+
+    def set_attr (self, new):
+        super().set_attr(new)
+
+    def del_attr(self):
+        super().del_attr()
+
+    valence_el = property(get_valence_el, set_attr, del_attr)
+    fullshell = property(get_fullshell, set_attr, del_attr)
 
 
 class Hydrogen(Element):

@@ -453,7 +453,7 @@ class Atom:
         for bond in self._bonds:
             in_bonds += bond.electron_count
             donate_bond += bond.atom_electrons(self)
-        total_prosp_el = in_bonds - donate_bond + element.valence_el - self.charge
+        total_prosp_el: int = in_bonds - donate_bond + element.valence_el - self.charge
         if not element.hypervalent and total_prosp_el > element.fullshell:
             return BondingError.HYPERVALENT_FIRST
         if donate_bond + self.charge > element.valence_el:

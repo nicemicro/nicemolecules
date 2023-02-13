@@ -472,7 +472,7 @@ class AppContainer(tk.Tk):
             change_to: Optional[eng.el.Element]
             change_to = eng.element_by_symbol(self.toolbar.atom_symbol)
             if change_to is None:
-                return
+                change_to = eng.el.CustomElement(self.toolbar.atom_symbol)
             for sel_num in self.selected:
                 if sel_num not in self.graphics:
                     continue
