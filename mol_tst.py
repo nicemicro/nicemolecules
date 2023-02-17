@@ -47,25 +47,27 @@ def XH(x = "C"):
 def SF6(n: int=6, central: str="S", terminal: str="F") -> tuple[list[eng.Atom], list[eng.CovBond]]:
     loc_x = [60, 100, 120, 60, 100, 40]
     loc_y = [50, 50, 80, 110, 110, 80]
-    molecules: list[eng.Atom] = []
+    atoms: list[eng.Atom] = []
     new_atom = eng.add_atom_by_symbol(central, (80, 80))
     assert isinstance(new_atom, eng.Atom)
-    molecules.append(new_atom)
+    atoms.append(new_atom)
     for x, y in zip(loc_x[0:n], loc_y[0:n]):
         new_atom = eng.add_atom_by_symbol(terminal, (x, y))
         assert isinstance(new_atom, eng.Atom)
-        molecules.append(new_atom)
-        molecules[-1].bond(molecules[0])
-    print(f"Bond angles: {molecules[0].bond_angles}")
-    print(f"Electron angles: {molecules[0].electron_angles}")
-    return molecules, molecules[0].bonds
+        atoms.append(new_atom)
+        print(atoms[-1].can_bond(atoms[0], electrons=(1, 1)))
+        print(atoms[0].can_bond(atoms[-1], electrons=(1, 1)))
+        atoms[-1].bond(atoms[0], electrons=(1, 1))
+    print(f"Bond angles: {atoms[0].bond_angles}")
+    print(f"Electron angles: {atoms[0].electron_angles}")
+    return atoms, atoms[0].bonds
 
-def methane():
-    a = eng.Atom(el.Carbon(), (40, 40))
-    b = eng.Atom(el.Hydrogen(), (20, 40))
-    c = eng.Atom(el.Hydrogen(), (60, 40))
-    d = eng.Atom(el.Hydrogen(), (40, 20))
-    e = eng.Atom(el.Hydrogen(), (40, 60))
+def methane(x = 40, y = 40):
+    a = eng.Atom(el.Carbon(), (x, y))
+    b = eng.Atom(el.Hydrogen(), (x-20, y))
+    c = eng.Atom(el.Hydrogen(), (x+20, y))
+    d = eng.Atom(el.Hydrogen(), (x, y-20))
+    e = eng.Atom(el.Hydrogen(), (x, y+20))
     a.bond(b)
     a.bond(c)
     a.bond(d)
@@ -90,21 +92,37 @@ def description(atoms, to_show = None):
         print(atoms[show_this].bonds[0].dativity)
 
 def optimize_tst():
-    molecules, bonds = SF6(4, "Xe", "F")
-    print(molecules)
+    atoms, bonds = SF6(4, "Xe", "F")
+    print(atoms)
     print([bond.length for bond in bonds])
-    opt.optimize_2D(molecules[0])
+    opt.optimize_2D(atoms[0])
     print("== After optimization ==")
-    print(molecules)
+    print(atoms)
     print([bond.length for bond in bonds])
 
+def join_molecules():
+    atoms, bonds = methane()
+    bonds.remove(atoms[4].bonds[0])
+    atoms[0].bond_instance(atoms[4]).delete()
+    atoms.pop(4)
+    atoms2, _ = methane(40, 90)
+    for atom in atoms + atoms2:
+        print(f"{atom.symbol} at ({atom.coords})")
+    atoms3, bonds3 = eng.merge_molecules(atoms[0], atoms2[3])
+    print("----")
+    #for atom in atoms3:
+    #    print(f"{atom.symbol} at ({atom.coords})")
+    print(atoms[0].describe())
+    return atoms + atoms3, bonds + bonds3
+
 if __name__ == '__main__':
-    #molecules, bonds = carbon_monoxide()
-    #molecules, bonds = XH("B")
-    molecules, bonds = SF6(4, "Xe", "F")
-    #molecules += [custom_element()]
-    molecules += [unrestricted_atom()]
-    #molecules, bonds = methane()
-    #description(molecules, [0])
+    #atoms, bonds = carbon_monoxide()
+    #atoms, bonds = XH("B")
+    #atoms, bonds = SF6(6, "C", "H")
+    #atoms, bonds = methane()
+    atoms, bonds = join_molecules()
+    #atoms += [custom_element()]
+    #atoms += [unrestricted_atom()]
+    #description(atoms, [0])
     #optimize_tst()
-    eng.to_xml(molecules + bonds + [custom_element()], "test.nm.xml")
+    #eng.to_xml(atoms + bonds + [custom_element()], "test.nm.xml")

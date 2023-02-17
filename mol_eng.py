@@ -38,7 +38,7 @@ class Bond:
         return self._atoms.copy()
 
     def get_electrons(self) -> list[int]:
-        """Returns the number of electrons constituting this bond."""
+        """Returns the number of electrons constituting this bond per atom."""
         return self._electrons.copy()
 
     def get_electron_count(self) -> int:
@@ -476,22 +476,39 @@ class Atom:
             return BondingError.HYPERVALENT_FIRST
         return BondingError.OK
 
-    def bond(self, other_atom, order: int = 1, dative: int = 0) -> CovBond:
+    def bond(
+        self,
+        other_atom,
+        order: int = 1,
+        dative: int = 0,
+        electrons: Optional[tuple[int, int]] = None
+    ) -> CovBond:
         """
         Bonds the current atom to an other atom with the specified bond order
         and dativity (dative/coordinative bond).
         """
         assert isinstance(other_atom, Atom), "Only can bond to an Atom instance"
-        bond_err = self.can_bond(other_atom, order, dative)
+        bond_err = self.can_bond(
+            other_atom, order=order, dative=dative, electrons=electrons
+        )
         if bond_err != BondingError.OK:
             raise RuntimeError(f"Bonding to atom failed. Error: {bond_err}")
-        new_bond: CovBond = CovBond([self, other_atom], order=order, dative=dative)
+        new_bond: CovBond
+        if electrons is None:
+            new_bond = CovBond([self, other_atom], order=order, dative=dative)
+        else:
+            new_bond = CovBond([self, other_atom], electrons=list(electrons))
         self._bonds.append(new_bond)
         other_atom.register_bond(new_bond)
         return new_bond
 
     def can_bond(
-        self, other_atom, order: int = 1, dative: int = 0, check_other: bool = True
+        self,
+        other_atom,
+        order: int = 1,
+        dative: int = 0,
+        electrons: Optional[tuple[int, int]] = None,
+        check_other: bool = True
     ) -> BondingError:
         """
         A check whether a bond can be created between the current atom and an
@@ -502,7 +519,9 @@ class Atom:
         # the new bond unless check_other is False.
         other_err = BondingError.OK
         if check_other:
-            other_err = other_atom.can_bond(self, order, -dative, False)
+            other_err = other_atom.can_bond(
+                self, order=order, dative=-dative, electrons=electrons, check_other=False
+            )
         # If there is any error from other atoms, we report that error directly
         if other_err != BondingError.OK:
             return other_err
@@ -511,6 +530,18 @@ class Atom:
         if self.is_bonded(other_atom):
             return BondingError.BOND_EXISTS
         # If there are less nonbonding electrons are left than what we need
+        if electrons is not None:
+            if check_other:
+                if self.nonbonding_el < electrons[0]:
+                    return BondingError.INSUFF_EL_FIRST
+                if not self.hypervalent and self.empty_valence < electrons[1]:
+                    return BondingError.HYPERVALENT_FIRST
+            else:
+                if self.nonbonding_el < electrons[1]:
+                    return BondingError.INSUFF_EL_OTHER  # This atom is NOT the "first"
+                if not self.hypervalent and self.empty_valence < electrons[0]:
+                    return BondingError.HYPERVALENT_OTHER
+            return BondingError.OK
         if self.nonbonding_el < order + dative:
             if check_other:
                 return BondingError.INSUFF_EL_FIRST
@@ -597,12 +628,17 @@ class UnrestrictedAtom(Atom):
         return BondingError.OK
 
     def can_bond(
-        self, other_atom, order: int = 1, dative: int = 0, check_other: bool = True
+        self,
+        other_atom,
+        order: int = 1,
+        dative: int = 0,
+        electrons: Optional[tuple[int, int]] = None,
+        check_other: bool = True
     ) -> BondingError:
         assert isinstance(other_atom, Atom), "Only can bond to an Atom instance"
         other_err = BondingError.OK
         if check_other:
-            other_err = other_atom.can_bond(self, order, -dative, False)
+            other_err = other_atom.can_bond(self, order, -dative, electrons, False)
         # If there is any error from other atoms, we report that error directly
         if other_err != BondingError.OK:
             return other_err
@@ -709,7 +745,7 @@ def angle_side_calc(angles: list[float], threshold: float = 0.0001) -> tuple[int
     return left, right
 
 
-def find_molecule(one_atom: Atom) -> tuple:
+def find_molecule(one_atom: Atom) -> tuple[list[Atom], list[CovBond]]:
     """Finds all CovBond and Atom instances that are somehow connected to the
     specified Atom instance, and hence form a molecule."""
     atomlist: list[Atom] = [one_atom]
@@ -726,6 +762,41 @@ def find_molecule(one_atom: Atom) -> tuple:
                 bondlist.append(bond_instance)
         current_num += 1
     return atomlist, bondlist
+
+
+def merge_molecules(
+    connect_to: Atom,
+    to_replace: Atom,
+    angle: float = 0
+) -> tuple[list[Atom], list[CovBond]]:
+    added_atoms, added_bonds = find_molecule(to_replace)
+    shift_x = connect_to.coord_x - to_replace.coord_x
+    shift_y = connect_to.coord_y - to_replace.coord_y
+    if connect_to in added_atoms:
+        raise RuntimeError("Can't merge a molecule with itself")
+    added_atoms.remove(to_replace)
+    for atom in added_atoms:
+        atom.coord_x += shift_x
+        atom.coord_y += shift_y
+    bond_electrons: dict[Atom, tuple[int, int]] = {}
+    other_atom: Atom
+    for bond in to_replace.bonds:
+        other_atom = bond.other_atoms(to_replace)[0]
+        bond_electrons[other_atom] = [
+            bond.atom_electrons(to_replace),
+            bond.atom_electrons(other_atom)
+        ]
+    removed_bonds = to_replace.unbond_all()
+    for removed_bond in removed_bonds:
+        assert isinstance(removed_bond, CovBond)
+        added_bonds.remove(removed_bond)
+    if connect_to is not None:
+        for bond_to, electrons in bond_electrons.items():
+            new_bond = connect_to.bond(
+                bond_to, electrons=electrons
+            )
+            added_bonds.append(new_bond)
+    return added_atoms, added_bonds
 
 
 def atomdist(one_atom: Atom, other_atom: Atom) -> float:

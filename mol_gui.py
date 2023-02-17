@@ -7,6 +7,7 @@ Created on Fri Feb 25 07:27:35 2022
 """
 import tkinter as tk
 import sys
+from os import listdir
 from getopt import gnu_getopt
 from tkinter import ttk
 from tkinter import font as tkfont
@@ -82,6 +83,9 @@ class TopToolbar(ttk.Frame):
     def get_atom_symbol(self) -> str:
         return self._symbol
 
+    def get_is_template_sel(self) -> bool:
+        return self._symbol.endswith(".nm.tmpl.xml")
+
     def get_bond_order(self) -> int:
         return self._bond[0]
 
@@ -103,6 +107,7 @@ class TopToolbar(ttk.Frame):
     is_add = property(get_is_add, toss)
     is_connect = property(get_is_connect, toss)
     atom_symbol = property(get_atom_symbol, toss)
+    is_tempate_sel = property(get_is_template_sel, toss)
     bond_order = property(get_bond_order, toss)
     bond_dativity = property(get_bond_dativity, toss)
     empty_val_style = property(get_empty_val_style, toss)
@@ -124,7 +129,7 @@ class TopToolbar(ttk.Frame):
         self._symbol: str = "C"
         self._bond: list[int] = [1, 0]
         self.status_text = tk.StringVar()
-        self.custom_atom_symbol = tk.StringVar()
+        self._custom_atom_symbol = tk.StringVar()
         atom_symbols: list[list[str]] = [
             ["H", "C", "N", "O", "F", ""],
             ["", "", "P", "S", "Cl"],
@@ -135,6 +140,11 @@ class TopToolbar(ttk.Frame):
             self.EmptyValence.HYDROGENS: "Hydrogens",
             self.EmptyValence.ELECTRONS: "Electrons",
         }
+        self._templates: dict[str, str] = {}
+        for fname in listdir("templates"):
+            if not fname.endswith(".nm.tmpl.xml"):
+                continue
+            self._templates[fname[0:-12]] = fname
 
         mode_row = ttk.Frame(self, padding="0 0 0 5")
         mode_row.grid(row=0, column=0, columnspan=1, sticky="nsew")
@@ -203,13 +213,33 @@ class TopToolbar(ttk.Frame):
                     command=lambda symbol=symbol: self.set_symbol(symbol),
                 )
                 self.buttons[f"atom {symbol}"].grid(row=row, column=index, columnspan=1)
-        ttk.Entry(custom_add, textvariable=self.custom_atom_symbol).grid(row=0, column=0, sticky="nsew")
+        ttk.Entry(
+            custom_add,
+            textvariable=self._custom_atom_symbol,
+            width=4
+        ).grid(row=0, column=0, sticky="nsew")
         self.buttons["atom custom"] = ttk.Button(
             custom_add,
             text="Set",
+            width=5,
             command=self.set_custom_symbol
         )
         self.buttons["atom custom"].grid(row=0, column=1, sticky="nsew")
+        self._activeTemplate = tk.StringVar()
+        self._activeTemplate.set(list(self._templates.keys())[0])
+        ttk.OptionMenu(
+            custom_add,
+            self._activeTemplate,
+            list(self._templates.keys())[0],
+            *list(self._templates.keys())
+        ).grid(row=0, column=2, sticky="nsew")
+        self.buttons["template"] = ttk.Button(
+            custom_add,
+            text="Set",
+            width=5,
+            command=self.set_template
+        )
+        self.buttons["template"].grid(row=0, column=3, sticky="nsew")
 
         self.buttons["bond order 1"] = ttk.Button(
             bond_sel, text="--",
@@ -273,8 +303,12 @@ class TopToolbar(ttk.Frame):
             self.buttons["add atom"]["style"] = "active.TButton"
             if f"atom {self._symbol}" in self.buttons:
                 self.buttons[f"atom {self._symbol}"]["style"] = "active.TButton"
-            else:
+            elif self.is_tempate_sel:
+                self.buttons["template"]["style"] = "active.TButton"
+            elif self._symbol == self._custom_atom_symbol.get():
                 self.buttons["atom custom"]["style"] = "active.TButton"
+            else:
+                assert False, "Unreachable"
             self.buttons[f"bond order {self._bond[0]}"]["style"] = "active.TButton"
             self.buttons[f"bond dative {self._bond[1]}"]["style"] = "active.TButton"
         elif self._mode == self.Modes.ADD_BOND:
@@ -309,10 +343,18 @@ class TopToolbar(ttk.Frame):
 
     def set_custom_symbol(self) -> None:
         """Sets the default atom symbol to a custom one for the application"""
-        new_symbol: str = self.custom_atom_symbol.get()
+        new_symbol: str = self._custom_atom_symbol.get()
         if new_symbol == "":
             return
         self.set_symbol(new_symbol)
+
+    def set_template(self) -> None:
+        """Sets the default thing created to be a template"""
+        new_symbol: str = self._activeTemplate.get()
+        if new_symbol == "":
+            return
+        self.set_symbol(self._templates[new_symbol])
+        print(self.atom_symbol)
 
     def set_bond(self, bondtype: list[Optional[int]]) -> None:
         """Sets the bond type: [order, dativity]"""
@@ -468,6 +510,8 @@ class AppContainer(tk.Tk):
         - in normal mode, if atoms are selected, those are changed to
           the symbol what has been selected on the toolbar."""
         if self.mode == self.Modes.NORMAL:
+            if self.toolbar.is_tempate_sel:
+                return
             changes: bool = False
             change_to: Optional[eng.el.Element]
             change_to = eng.element_by_symbol(self.toolbar.atom_symbol)
@@ -640,6 +684,11 @@ class AppContainer(tk.Tk):
                 ):
                     return
             coords = (event.x, event.y)
+            if self.toolbar.is_tempate_sel:
+                new_atom: eng.Atom = self.add_atom("Q", coords)
+                self.atoms.append(new_atom)
+                self.add_from_template(self.toolbar.atom_symbol, new_atom, 0)
+                return
             self.add_atom(self.toolbar.atom_symbol, coords)
 
     def leftdown_atom(self, atom_id: int, _event: tk.Event) -> None:
@@ -947,6 +996,24 @@ class AppContainer(tk.Tk):
         self.atoms.append(new_atom)
         self.redraw_all()
         return new_atom
+
+    def add_from_template(
+        self,
+        filename: str,
+        connect_to: Optional[eng.Atom],
+        angle: float
+    ) -> tuple[list[eng.Atom], list[eng.CovBond]]:
+        template_objs = eng.read_xml("templates/" + filename) # TODO: make this cross platform
+        removable_atom: eng.Atom
+        for obj in template_objs:
+            if isinstance(obj, eng.Atom) and obj.symbol == "Q":
+                removable_atom = obj
+                break
+        new_atoms, new_bonds = eng.merge_molecules(connect_to, removable_atom)
+        self.atoms += new_atoms
+        self.cov_bonds += new_bonds
+        self.redraw_all()
+        return new_atoms, new_bonds
 
     def draw_bond_atoms(
         self,
