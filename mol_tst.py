@@ -105,10 +105,10 @@ def join_molecules():
     bonds.remove(atoms[4].bonds[0])
     atoms[0].bond_instance(atoms[4]).delete()
     atoms.pop(4)
-    atoms2, _ = methane(40, 90)
-    for atom in atoms + atoms2:
+    atoms2, _ = methane(40, 130)
+    atoms3, bonds3 = eng.merge_molecules(atoms[0], atoms2[3], (40, 70))
+    for atom in atoms + atoms3:
         print(f"{atom.symbol} at ({atom.coords})")
-    atoms3, bonds3 = eng.merge_molecules(atoms[0], atoms2[3])
     print("----")
     #for atom in atoms3:
     #    print(f"{atom.symbol} at ({atom.coords})")

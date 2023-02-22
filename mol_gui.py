@@ -7,7 +7,7 @@ Created on Fri Feb 25 07:27:35 2022
 """
 import tkinter as tk
 import sys
-from os import listdir
+from os import listdir, path
 from getopt import gnu_getopt
 from tkinter import ttk
 from tkinter import font as tkfont
@@ -685,9 +685,7 @@ class AppContainer(tk.Tk):
                     return
             coords = (event.x, event.y)
             if self.toolbar.is_tempate_sel:
-                new_atom: eng.Atom = self.add_atom("Q", coords)
-                self.atoms.append(new_atom)
-                self.add_from_template(self.toolbar.atom_symbol, new_atom, 0)
+                self.add_from_template(self.toolbar.atom_symbol, coords)
                 return
             self.add_atom(self.toolbar.atom_symbol, coords)
 
@@ -715,9 +713,13 @@ class AppContainer(tk.Tk):
             return
         if self.toolbar.is_add:
             self.event_listened = True
-            test_atom = eng.add_atom_by_symbol(self.toolbar.atom_symbol, (0, 0))
-            if test_atom is None:
-                test_atom = eng.UnrestrictedAtom(self.toolbar.atom_symbol, (0, 0))
+            test_atom: Optional[eng.Atom]
+            if self.toolbar.is_tempate_sel:
+                test_atom = eng.UnrestrictedAtom(self.toolbar.atom_symbol[0:3], (0, 0))
+            else:
+                test_atom = eng.add_atom_by_symbol(self.toolbar.atom_symbol, (0, 0))
+                if test_atom is None:
+                    test_atom = eng.UnrestrictedAtom(self.toolbar.atom_symbol, (0, 0))
             assert test_atom is not None, "Test atom could not be created."
             if (
                 sel_atom.can_bond(
@@ -726,7 +728,7 @@ class AppContainer(tk.Tk):
                 != eng.BondingError.OK
             ):
                 return
-            self.possible_atoms(sel_atom)
+            self.possible_atoms(sel_atom, test_atom)
             self.mode = self.Modes.ADD_LINKED_ATOM
             return
         if self.toolbar.is_connect:
@@ -749,15 +751,23 @@ class AppContainer(tk.Tk):
             new_x = int(self.mol_canvas.coords(atomplace)[0])
             new_y = int(self.mol_canvas.coords(atomplace)[1])
             atom_connect = self.atoms[atom_id]
-            new_atom = self.add_atom(self.toolbar.atom_symbol, (new_x, new_y))
-            new_bond = atom_connect.bond(
-                new_atom,
-                order=self.toolbar.bond_order,
-                dative=self.toolbar.bond_dativity,
-            )
-            self.cov_bonds.append(new_bond)
+            if self.toolbar.is_tempate_sel:
+                self.add_from_template(
+                    self.toolbar.atom_symbol,
+                    atom_connect,
+                    (new_x, new_y)
+                )
+            else:
+                new_atom = self.add_atom(self.toolbar.atom_symbol, (new_x, new_y))
+                new_bond = atom_connect.bond(
+                    new_atom,
+                    order=self.toolbar.bond_order,
+                    dative=self.toolbar.bond_dativity,
+                )
+                self.cov_bonds.append(new_bond)
             self.redraw_all()
             self.set_normal_mode()
+            return
         if self.mode == self.Modes.LINK_ATOMS:
             closestitems = self.mol_canvas.find_closest(event.x, event.y)
             self.mol_canvas.itemconfigure("ui_help", fill="#aaaaaa")
@@ -933,7 +943,7 @@ class AppContainer(tk.Tk):
                 tags=("ui_help", f"ui_help-{atom_link_num}"),
             )
 
-    def possible_atoms(self, atom: eng.Atom) -> None:
+    def possible_atoms(self, atom: eng.Atom, new_atom: eng.Atom) -> None:
         """Draws possible atoms that could be created and joined
         to the current atom in linked atom drawing mode."""
         num = 1
@@ -959,7 +969,7 @@ class AppContainer(tk.Tk):
             self.mol_canvas.create_text(
                 atom.coord_x + deltax,
                 atom.coord_y + deltay,
-                text=self.toolbar.atom_symbol,
+                text=new_atom.symbol,
                 font=self.symbol_font,
                 justify="center",
                 fill="#aaaaaa",
@@ -1000,16 +1010,29 @@ class AppContainer(tk.Tk):
     def add_from_template(
         self,
         filename: str,
-        connect_to: Optional[eng.Atom],
-        angle: float
+        connect_to: Union[tuple[float, float], eng.CovBond, eng.Atom],
+        new_place: Optional[tuple[int, int]] = None
     ) -> tuple[list[eng.Atom], list[eng.CovBond]]:
-        template_objs = eng.read_xml("templates/" + filename) # TODO: make this cross platform
+        template_objs = eng.read_xml(
+            path.join("templates", filename)
+        )
+        new_atoms: list[eng.Atom] = []
+        new_bonds: list[eng.CovBond] = []
         removable_atom: eng.Atom
-        for obj in template_objs:
-            if isinstance(obj, eng.Atom) and obj.symbol == "Q":
-                removable_atom = obj
-                break
-        new_atoms, new_bonds = eng.merge_molecules(connect_to, removable_atom)
+        if isinstance(connect_to, tuple):
+            for obj in template_objs:
+                if isinstance(obj, eng.Atom) and obj.symbol == "Q2":
+                    removable_atom = obj
+            new_atom = eng.add_atom_by_symbol("C", connect_to)
+            assert isinstance(new_atom, eng.Atom)
+            self.atoms.append(new_atom)
+            new_atoms, new_bonds = eng.merge_molecules(new_atom, removable_atom)
+        elif isinstance(connect_to, eng.Atom):
+            for obj in template_objs:
+                if isinstance(obj, eng.Atom) and obj.symbol == "Q1":
+                    removable_atom = obj
+                    break
+            new_atoms, new_bonds = eng.merge_molecules(connect_to, removable_atom, new_place)
         self.atoms += new_atoms
         self.cov_bonds += new_bonds
         self.redraw_all()

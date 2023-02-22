@@ -5,7 +5,7 @@ Created on Mon Feb 21 15:52:19 2022
 @author: nicemicro
 """
 
-from math import sqrt, atan2, pi
+from math import sqrt, atan2, cos, sin, pi
 from typing import Optional, Any, Union
 from enum import IntEnum, auto
 from xml.etree import ElementTree as ET
@@ -767,25 +767,54 @@ def find_molecule(one_atom: Atom) -> tuple[list[Atom], list[CovBond]]:
 def merge_molecules(
     connect_to: Atom,
     to_replace: Atom,
-    angle: float = 0
+    second_atom: Optional[tuple[int, int]] = None
 ) -> tuple[list[Atom], list[CovBond]]:
     added_atoms, added_bonds = find_molecule(to_replace)
-    shift_x = connect_to.coord_x - to_replace.coord_x
-    shift_y = connect_to.coord_y - to_replace.coord_y
+    origin_x = connect_to.coord_x
+    origin_y = connect_to.coord_y
+    shift_x = -to_replace.coord_x
+    shift_y = -to_replace.coord_y
+    print(f"shift: {shift_x},{shift_y}, origin:{origin_x},{origin_y}, second_atom:{second_atom}")
     if connect_to in added_atoms:
         raise RuntimeError("Can't merge a molecule with itself")
     added_atoms.remove(to_replace)
+    if second_atom is not None:
+        original_x = to_replace.bonded_atoms[0].coord_x + shift_x
+        original_y = to_replace.bonded_atoms[0].coord_y + shift_y
+        new_x = second_atom[0] - origin_x
+        new_y = second_atom[1] - origin_y
+        #print(f"{original_x},{original_y} -> {new_x},{new_y}")
+        delta_angle = (
+            atan2(new_y, new_x) -
+            atan2(original_y, original_x)
+        )
+        multiplier = (
+            sqrt(new_x ** 2 + new_y ** 2) /
+            sqrt(original_x ** 2 + original_y ** 2)
+        )
+        #print(f"angle: {delta_angle}, multiplier: {multiplier}")
+        for atom in added_atoms:
+            atom.coord_x = (atom.coord_x + shift_x) * multiplier
+            atom.coord_y = (atom.coord_y + shift_y) * multiplier
+            atom.coords = (
+                atom.coord_x * cos(delta_angle) - atom.coord_y * sin(delta_angle),
+                atom.coord_x * sin(delta_angle) + atom.coord_y * cos(delta_angle)
+            )
+    else:
+        for atom in added_atoms:
+            atom.coord_x += shift_x
+            atom.coord_y += shift_y
     for atom in added_atoms:
-        atom.coord_x += shift_x
-        atom.coord_y += shift_y
+        atom.coord_x += origin_x
+        atom.coord_y += origin_y
     bond_electrons: dict[Atom, tuple[int, int]] = {}
     other_atom: Atom
     for bond in to_replace.bonds:
         other_atom = bond.other_atoms(to_replace)[0]
-        bond_electrons[other_atom] = [
+        bond_electrons[other_atom] = (
             bond.atom_electrons(to_replace),
             bond.atom_electrons(other_atom)
-        ]
+        )
     removed_bonds = to_replace.unbond_all()
     for removed_bond in removed_bonds:
         assert isinstance(removed_bond, CovBond)
