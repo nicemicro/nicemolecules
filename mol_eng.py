@@ -764,7 +764,7 @@ def find_molecule(one_atom: Atom) -> tuple[list[Atom], list[CovBond]]:
     return atomlist, bondlist
 
 
-def merge_molecules(
+def merge_molecules_atom(
     connect_to: Atom,
     to_replace: Atom,
     second_atom: Optional[tuple[int, int]] = None
@@ -774,7 +774,7 @@ def merge_molecules(
     origin_y = connect_to.coord_y
     shift_x = -to_replace.coord_x
     shift_y = -to_replace.coord_y
-    print(f"shift: {shift_x},{shift_y}, origin:{origin_x},{origin_y}, second_atom:{second_atom}")
+    #print(f"shift: {shift_x},{shift_y}, origin:{origin_x},{origin_y}, second_atom:{second_atom}")
     if connect_to in added_atoms:
         raise RuntimeError("Can't merge a molecule with itself")
     added_atoms.remove(to_replace)
@@ -826,6 +826,86 @@ def merge_molecules(
             )
             added_bonds.append(new_bond)
     return added_atoms, added_bonds
+
+
+def merge_molecules_bonds(
+    orig_bond: CovBond,
+    template_bond: CovBond,
+    direction: Optional[tuple[int, int]] = None
+) -> tuple[list[Atom], list[CovBond]]:
+    added_atoms, added_bonds = find_molecule(template_bond.atoms[0])
+    if orig_bond.atoms[0] in added_atoms:
+        raise RuntimeError("Can't merge a molecule with itself")
+    if (
+        abs(orig_bond.dativity) != abs(template_bond.dativity) or
+        orig_bond.order != template_bond.order
+    ):
+        raise RuntimeError("Can't merge bonds of different dativity or order")
+    origin_atom = orig_bond.atoms[0]
+    directional_atom = orig_bond.atoms[1]
+    if orig_bond.dativity == -template_bond.dativity:
+        origin_atom, directional_atom = directional_atom, origin_atom
+    shift_x = -template_bond.atoms[0].coord_x
+    shift_y = -template_bond.atoms[0].coord_y
+    rotate_to_x = directional_atom.coord_x - origin_atom.coord_x
+    rotate_to_y = directional_atom.coord_y - origin_atom.coord_y
+    template_x = template_bond.atoms[1].coord_x - template_bond.atoms[0].coord_x
+    template_y = template_bond.atoms[1].coord_y - template_bond.atoms[0].coord_y
+    delta_angle = (
+        atan2(rotate_to_y, rotate_to_x) -
+        atan2(template_y, template_x)
+    )
+    multiplier = (
+        sqrt(rotate_to_x ** 2 + rotate_to_y ** 2) /
+        sqrt(template_x ** 2 + template_y ** 2)
+    )
+    for atom in added_atoms:
+        atom.coord_x = (atom.coord_x + shift_x) * multiplier
+        atom.coord_y = (atom.coord_y + shift_y) * multiplier
+        atom.coords = (
+            atom.coord_x * cos(delta_angle) - atom.coord_y * sin(delta_angle),
+            atom.coord_x * sin(delta_angle) + atom.coord_y * cos(delta_angle)
+        )
+    for atom in added_atoms:
+        atom.coord_x += origin_atom.coord_x
+        atom.coord_y += origin_atom.coord_y
+    bond_electrons: list[dict[Atom, tuple[int, int]]] = []
+    bonds_dict: dict[Atom, tuple[int, int]]
+    for atom in template_bond.atoms:
+        bonds_dict = {}
+        for bond in atom.bonds:
+            if bond == template_bond:
+                continue
+            other_atom = bond.other_atoms(atom)[0]
+            bonds_dict[other_atom] = (
+                bond.atom_electrons(atom),
+                bond.atom_electrons(other_atom)
+            )
+        bond_electrons.append(bonds_dict)
+    for atom in template_bond.atoms:
+        removed_bonds = atom.unbond_all()
+        for removed_bond in removed_bonds:
+            assert isinstance(removed_bond, CovBond)
+            added_bonds.remove(removed_bond)
+        added_atoms.remove(atom)
+    for atom, bonds_dict in zip([origin_atom, directional_atom], bond_electrons):
+        for bond_to, electrons in bonds_dict.items():
+            new_bond = atom.bond(
+                bond_to, electrons=electrons
+            )
+            added_bonds.append(new_bond)
+    return added_atoms, added_bonds
+
+
+def merge_molecules(
+    connect: Union[tuple[Atom, Atom], tuple[CovBond, CovBond]],
+    second_atom: Optional[tuple[int, int]] = None
+) -> tuple[list[Atom], list[CovBond]]:
+    if isinstance(connect[0], Atom):
+        return merge_molecules_atom(*connect, second_atom)
+    if isinstance(connect[0], CovBond):
+        return merge_molecules_bonds(*connect, second_atom)
+    return ([], [])
 
 
 def atomdist(one_atom: Atom, other_atom: Atom) -> float:

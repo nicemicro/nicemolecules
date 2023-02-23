@@ -853,6 +853,8 @@ class AppContainer(tk.Tk):
             self.mol_canvas.itemconfigure(f"bond-{bond_id}", fill="green", width=2)
             self.event_listened = True
             return
+        if self.toolbar.is_add and self.toolbar.is_tempate_sel:
+            self.add_from_template(self.toolbar.atom_symbol, self.cov_bonds[bond_id])
 
     def change_font_weight(
         self, item_num: int, new_weight: Literal["bold", "normal"]
@@ -1026,13 +1028,30 @@ class AppContainer(tk.Tk):
             new_atom = eng.add_atom_by_symbol("C", connect_to)
             assert isinstance(new_atom, eng.Atom)
             self.atoms.append(new_atom)
-            new_atoms, new_bonds = eng.merge_molecules(new_atom, removable_atom)
+            new_atoms, new_bonds = eng.merge_molecules((new_atom, removable_atom))
         elif isinstance(connect_to, eng.Atom):
             for obj in template_objs:
                 if isinstance(obj, eng.Atom) and obj.symbol == "Q1":
                     removable_atom = obj
                     break
-            new_atoms, new_bonds = eng.merge_molecules(connect_to, removable_atom, new_place)
+            new_atoms, new_bonds = eng.merge_molecules(
+                (connect_to, removable_atom), new_place
+            )
+        elif isinstance(connect_to, eng.CovBond):
+            for obj in template_objs:
+                if isinstance(obj, eng.Atom) and obj.symbol == "Q3":
+                    removable_atom = obj
+                    break
+            removable_bond: Optional[eng.CovBond] = None
+            for atom in removable_atom.bonded_atoms:
+                if atom.symbol == "Q4":
+                    removable_bond = removable_atom.bond_instance(atom)
+                    break
+            if removable_bond is None:
+                raise RuntimeError("No required connected atom found")
+            new_atoms, new_bonds = eng.merge_molecules(
+                (connect_to, removable_bond), new_place
+            )
         self.atoms += new_atoms
         self.cov_bonds += new_bonds
         self.redraw_all()
