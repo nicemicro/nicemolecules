@@ -1010,57 +1010,108 @@ class AppContainer(tk.Tk):
         self.redraw_all()
         return new_atom
 
+    def load_template(
+        self, filename: str
+    ) -> dict[str, dict[str, list[eng.Atom]]]:
+        template_objs = eng.read_xml(
+            path.join("templates", filename)
+        )
+        template_mols: dict[str, dict[str, list[eng.Atom]]] = {
+            "lone": {},
+            "atom": {},
+            "bond": {}
+        }
+        temp_name: str = ""
+        temp_type: Literal["lone", "atom", "bond"] = "lone"
+        while len(template_objs) > 0:
+            obj = template_objs[0]
+            if not isinstance(obj, eng.Atom):
+                template_objs.pop(0)
+                continue
+            molecule, _ = eng.find_molecule(obj)
+            temp_type = "lone"
+            temp_name = "noname"
+            for atom in molecule:
+                template_objs.remove(atom)
+                if atom.symbol[0:2] == "Q2":
+                    temp_type = "atom"
+                    temp_name = atom.symbol
+                    continue
+                if atom.symbol[0:2] == "Q3":
+                    temp_type = "bond"
+                    temp_name = atom.symbol
+                    continue
+                if atom.symbol[0:2] == "Q1":
+                    temp_type = "lone"
+                    temp_name = atom.symbol
+            while temp_name in template_mols[temp_type]:
+                temp_name = temp_name + "z"
+            template_mols[temp_type][temp_name] = molecule
+        return template_mols
+
     def add_from_template(
         self,
         filename: str,
         connect_to: Union[tuple[float, float], eng.CovBond, eng.Atom],
         new_place: Optional[tuple[int, int]] = None
     ) -> tuple[list[eng.Atom], list[eng.CovBond]]:
-        template_objs = eng.read_xml(
-            path.join("templates", filename)
-        )
+        template_mols = self.load_template(filename)
         new_atoms: list[eng.Atom] = []
         new_bonds: list[eng.CovBond] = []
         removable_atom: eng.Atom
         error: eng.BondingError
+        template_names: list[str] = []
         if isinstance(connect_to, tuple):
-            for obj in template_objs:
-                if isinstance(obj, eng.Atom) and obj.symbol == "Q2":
-                    removable_atom = obj
-            new_atom = eng.add_atom_by_symbol("C", connect_to)
+            template_names = list(template_mols["lone"].keys())
+            removable_atom = template_mols["lone"][template_names[0]][0]
+            new_symbol: str = removable_atom.symbol
+            for atom in template_mols["lone"][template_names[0]]:
+                if atom.symbol[0:2] == "Q1":
+                    removable_atom = atom
+                    break
+            new_atom = eng.add_atom_by_symbol(new_symbol, connect_to)
             assert isinstance(new_atom, eng.Atom)
             self.atoms.append(new_atom)
             error = eng.can_merge_molecules((new_atom, removable_atom))
             if error == eng.BondingError.OK:
                 new_atoms, new_bonds = eng.merge_molecules((new_atom, removable_atom))
         elif isinstance(connect_to, eng.Atom):
-            for obj in template_objs:
-                if isinstance(obj, eng.Atom) and obj.symbol == "Q1":
-                    removable_atom = obj
+            template_names = list(template_mols["atom"].keys())
+            template_names.sort()
+            for molecule_name in template_names:
+                molecule = template_mols["atom"][molecule_name]
+                for atom in molecule:
+                    if atom.symbol[0:2] == "Q2":
+                        removable_atom = atom
+                        break
+                error = eng.can_merge_molecules((connect_to, removable_atom))
+                if error == eng.BondingError.OK:
+                    new_atoms, new_bonds = eng.merge_molecules(
+                        (connect_to, removable_atom), new_place
+                    )
                     break
-            error = eng.can_merge_molecules((connect_to, removable_atom))
-            if error == eng.BondingError.OK:
-                new_atoms, new_bonds = eng.merge_molecules(
-                    (connect_to, removable_atom), new_place
-                )
         elif isinstance(connect_to, eng.CovBond):
-            for obj in template_objs:
-                if isinstance(obj, eng.Atom) and obj.symbol == "Q3":
-                    removable_atom = obj
+            template_names = list(template_mols["bond"].keys())
+            template_names.sort()
+            for molecule_name in template_names:
+                molecule = template_mols["bond"][molecule_name]
+                for atom in molecule:
+                    if atom.symbol[0:2] == "Q3":
+                        removable_atom = atom
+                        break
+                removable_bond: Optional[eng.CovBond] = None
+                for atom in removable_atom.bonded_atoms:
+                    if atom.symbol[0:2] == "Q4":
+                        removable_bond = removable_atom.bond_instance(atom)
+                        break
+                if removable_bond is None:
+                    raise RuntimeError("No required connected atom found")
+                error = eng.can_merge_molecules((connect_to, removable_bond))
+                if error == eng.BondingError.OK:
+                    new_atoms, new_bonds = eng.merge_molecules(
+                        (connect_to, removable_bond), new_place
+                    )
                     break
-            removable_bond: Optional[eng.CovBond] = None
-            for atom in removable_atom.bonded_atoms:
-                if atom.symbol == "Q4":
-                    removable_bond = removable_atom.bond_instance(atom)
-                    break
-            if removable_bond is None:
-                raise RuntimeError("No required connected atom found")
-            error = eng.can_merge_molecules((connect_to, removable_bond))
-            if error == eng.BondingError.OK:
-                new_atoms, new_bonds = eng.merge_molecules(
-                    (connect_to, removable_bond), new_place
-                )
-        print(error)
         self.atoms += new_atoms
         self.cov_bonds += new_bonds
         self.redraw_all()
