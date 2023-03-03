@@ -21,6 +21,7 @@ class BondingError(IntEnum):
     OK = auto()
     BOND_SELF = auto()
     BOND_EXISTS = auto()
+    IMPROPER_BOND = auto()
     INSUFF_EL_FIRST = auto()
     INSUFF_EL_OTHER = auto()
     HYPERVALENT_FIRST = auto()
@@ -287,11 +288,7 @@ class Atom:
         return atomlist
 
     def get_electrons(self) -> int:
-        from_bonds: int = 0
-        for bond in self._bonds:
-            from_bonds += bond.electron_count
-            from_bonds -= bond.atom_electrons(self)
-        return from_bonds + self.valence
+        return self.get_els_from_bonds() + self.valence
 
     def get_nonbonding_el(self) -> int:
         nonbonding: int = self.valence
@@ -301,6 +298,19 @@ class Atom:
 
     def get_empty_valence(self) -> int:
         return int(self.fullshell - self.get_electrons())
+
+    def get_els_from_bonds(self) -> int:
+        from_bonds: int = 0
+        for bond in self._bonds:
+            from_bonds += bond.electron_count
+            from_bonds -= bond.atom_electrons(self)
+        return from_bonds
+
+    def get_els_to_bonds(self) -> int:
+        into_bonds: int = 0
+        for bond in self._bonds:
+            into_bonds += bond.atom_electrons(self)
+        return into_bonds
 
     def get_radicals(self) -> int:
         radicals: int = min(self.get_empty_valence(), self.get_nonbonding_el())
@@ -386,6 +396,8 @@ class Atom:
     electrons = property(get_electrons, toss)
     nonbonding_el = property(get_nonbonding_el, toss)
     empty_valence = property(get_empty_valence, toss)
+    els_from_bonds = property(get_els_from_bonds, toss)
+    els_to_bonds = property(get_els_to_bonds, toss)
     radicals = property(get_radicals, toss)
     lone_pairs = property(get_lone_pairs, toss)
     bond_angles = property(get_bond_angles, toss)
@@ -905,7 +917,72 @@ def merge_molecules(
         return merge_molecules_atom(*connect, second_atom)
     if isinstance(connect[0], CovBond):
         return merge_molecules_bonds(*connect, second_atom)
+    assert False, "Unreachable"
     return ([], [])
+
+
+def can_merge_molecules(
+    connect: Union[tuple[Atom, Atom], tuple[CovBond, CovBond]],
+) -> BondingError:
+    if isinstance(connect[0], Atom):
+        connect_to: Atom = connect[0]
+        to_replace: Atom = connect[1]
+        if (
+            connect_to.empty_valence < to_replace.els_from_bonds and
+            not connect_to.hypervalent
+        ):
+            return BondingError.HYPERVALENT_FIRST
+        if (
+            connect_to.nonbonding_el < to_replace.els_to_bonds
+        ):
+            return BondingError.INSUFF_EL_FIRST
+        return BondingError.OK
+    if isinstance(connect[0], CovBond):
+        orig_bond: CovBond = connect[0]
+        template_bond: CovBond = connect[1]
+        if (
+            abs(orig_bond.dativity) != abs(template_bond.dativity) or
+            orig_bond.order != template_bond.order
+        ):
+            return BondingError.IMPROPER_BOND
+        orig_first: Atom = orig_bond.atoms[0]
+        orig_second: Atom = orig_bond.atoms[1]
+        template_first: Atom = template_bond.atoms[0]
+        template_second: Atom = template_bond.atoms[1]
+        if orig_bond.dativity == -template_bond.dativity:
+            orig_first, orig_second = orig_second, orig_first
+        if (
+            orig_first.empty_valence < (
+                template_first.els_from_bonds -
+                template_bond.atom_electrons(template_second)
+            ) and
+            not orig_first.hypervalent
+        ):
+            return BondingError.HYPERVALENT_FIRST
+        if (
+            orig_first.nonbonding_el < (
+                template_first.els_to_bonds -
+                template_bond.atom_electrons(template_first)
+            )
+        ):
+            return BondingError.INSUFF_EL_FIRST
+        if (
+            orig_second.empty_valence < (
+                template_second.els_from_bonds -
+                template_bond.atom_electrons(template_first)
+            ) and
+            not orig_second.hypervalent
+        ):
+            return BondingError.HYPERVALENT_OTHER
+        if (
+            orig_second.nonbonding_el < (
+                template_second.els_to_bonds -
+                template_bond.atom_electrons(template_second)
+            )
+        ):
+            return BondingError.INSUFF_EL_OTHER
+        return BondingError.OK
+    return BondingError.MISC_ERROR
 
 
 def atomdist(one_atom: Atom, other_atom: Atom) -> float:

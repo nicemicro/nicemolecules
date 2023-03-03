@@ -102,11 +102,13 @@ def optimize_tst():
 
 def join_molecules():
     atoms, bonds = methane()
+    atoms2, _ = methane(40, 130)
+    print(eng.can_merge_molecules((atoms[0], atoms2[3])))
     bonds.remove(atoms[4].bonds[0])
     atoms[0].bond_instance(atoms[4]).delete()
     atoms.pop(4)
-    atoms2, _ = methane(40, 130)
-    atoms3, bonds3 = eng.merge_molecules(atoms[0], atoms2[3], (40, 70))
+    print(eng.can_merge_molecules((atoms[0], atoms2[3])))
+    atoms3, bonds3 = eng.merge_molecules((atoms[0], atoms2[3]), (40, 70))
     for atom in atoms + atoms3:
         print(f"{atom.symbol} at ({atom.coords})")
     print("----")
@@ -115,12 +117,23 @@ def join_molecules():
     print(atoms[0].describe())
     return atoms + atoms3, bonds + bonds3
 
+def join_molecules2():
+    atoms, bonds = SF6(4, "Xe")
+    test1 = eng.Atom(eng.element_by_symbol("C"), (100, 100))
+    test2 = eng.Atom(eng.element_by_symbol("C"), (100, 120))
+    test1.bond(test2, order=2)
+    print(eng.can_merge_molecules((atoms[0], test1)))
+    if eng.can_merge_molecules((atoms[0], test1)) != eng.BondingError.OK:
+        return [], []
+    atoms2, bonds2 = eng.merge_molecules((atoms[0], test1))
+    return atoms + atoms2, bonds + bonds2
+
 if __name__ == '__main__':
     #atoms, bonds = carbon_monoxide()
     #atoms, bonds = XH("B")
     #atoms, bonds = SF6(6, "C", "H")
     #atoms, bonds = methane()
-    atoms, bonds = join_molecules()
+    atoms, bonds = join_molecules2()
     #atoms += [custom_element()]
     #atoms += [unrestricted_atom()]
     #description(atoms, [0])

@@ -855,6 +855,7 @@ class AppContainer(tk.Tk):
             return
         if self.toolbar.is_add and self.toolbar.is_tempate_sel:
             self.add_from_template(self.toolbar.atom_symbol, self.cov_bonds[bond_id])
+            self.event_listened = True
 
     def change_font_weight(
         self, item_num: int, new_weight: Literal["bold", "normal"]
@@ -1021,6 +1022,7 @@ class AppContainer(tk.Tk):
         new_atoms: list[eng.Atom] = []
         new_bonds: list[eng.CovBond] = []
         removable_atom: eng.Atom
+        error: eng.BondingError
         if isinstance(connect_to, tuple):
             for obj in template_objs:
                 if isinstance(obj, eng.Atom) and obj.symbol == "Q2":
@@ -1028,15 +1030,19 @@ class AppContainer(tk.Tk):
             new_atom = eng.add_atom_by_symbol("C", connect_to)
             assert isinstance(new_atom, eng.Atom)
             self.atoms.append(new_atom)
-            new_atoms, new_bonds = eng.merge_molecules((new_atom, removable_atom))
+            error = eng.can_merge_molecules((new_atom, removable_atom))
+            if error == eng.BondingError.OK:
+                new_atoms, new_bonds = eng.merge_molecules((new_atom, removable_atom))
         elif isinstance(connect_to, eng.Atom):
             for obj in template_objs:
                 if isinstance(obj, eng.Atom) and obj.symbol == "Q1":
                     removable_atom = obj
                     break
-            new_atoms, new_bonds = eng.merge_molecules(
-                (connect_to, removable_atom), new_place
-            )
+            error = eng.can_merge_molecules((connect_to, removable_atom))
+            if error == eng.BondingError.OK:
+                new_atoms, new_bonds = eng.merge_molecules(
+                    (connect_to, removable_atom), new_place
+                )
         elif isinstance(connect_to, eng.CovBond):
             for obj in template_objs:
                 if isinstance(obj, eng.Atom) and obj.symbol == "Q3":
@@ -1049,9 +1055,12 @@ class AppContainer(tk.Tk):
                     break
             if removable_bond is None:
                 raise RuntimeError("No required connected atom found")
-            new_atoms, new_bonds = eng.merge_molecules(
-                (connect_to, removable_bond), new_place
-            )
+            error = eng.can_merge_molecules((connect_to, removable_bond))
+            if error == eng.BondingError.OK:
+                new_atoms, new_bonds = eng.merge_molecules(
+                    (connect_to, removable_bond), new_place
+                )
+        print(error)
         self.atoms += new_atoms
         self.cov_bonds += new_bonds
         self.redraw_all()
